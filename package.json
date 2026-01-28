@@ -1,0 +1,21 @@
+{
+  "name": "recimo-the-recipe-website-backend",
+  "version": "1.0.0",
+  "description": "Recimo 後端 API 專案。詳細開發文件與 API 使用說明請參考我們的Notion文件：[https://www.notion.so/2f672d13d8bf804dba18f79891e3d5ff?source=copy_link]",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tom36596263/Recimo-the-recipe-website-backend.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/tom36596263/Recimo-the-recipe-website-backend/issues"
+  },
+  "homepage": "https://github.com/tom36596263/Recimo-the-recipe-website-backend#readme"
+}
