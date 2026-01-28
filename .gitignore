@@ -1,3 +1,8 @@
+# 忽略所有包含實際帳密的連線檔
+connect_cjd102g1.php
+connect_tibamefe_carlos_test1.php
+db_config.php
+
 # 忽略 VS Code 設定
 .vscode/
 
