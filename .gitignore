@@ -1,0 +1,10 @@
+# 忽略含有實際密碼的連線檔
+connect_cjd102g1.php
+db_config.php
+
+# 忽略 VS Code 設定
+.vscode/
+
+# 忽略系統暫存檔
+.DS_Store
+Thumbs.db
