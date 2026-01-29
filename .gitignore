@@ -9,3 +9,4 @@ db_config.php
 # 忽略系統暫存檔
 .DS_Store
 Thumbs.db
+.github

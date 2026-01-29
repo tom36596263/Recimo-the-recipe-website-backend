@@ -1,6 +1,3 @@
-<!-- 處理跨域 -->
-<!-- 引入方法 -->
-<!-- require_once("../config/cors.php"); -->
 <?php
   // 允許的域名列表(白名單)
   // $allowed_origins = [
