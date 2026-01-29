@@ -1,5 +1,5 @@
 <?php
-if( str_contains($_SERVER["HTTP_HOST"], "127.0.0.1") || str_contains($_SERVER["HTTP_HOST"], "localhost") ){
+if (str_contains($_SERVER["HTTP_HOST"], "127.0.0.1") || str_contains($_SERVER["HTTP_HOST"], "localhost")) {
     // localhost
     $db_host = '127.0.0.1';
     $db_port = 8889;
@@ -7,7 +7,7 @@ if( str_contains($_SERVER["HTTP_HOST"], "127.0.0.1") || str_contains($_SERVER["H
 
     $db_user = 'root';
     $db_password = 'root';
-}else{
+} else {
     // remote
     $db_host = '127.0.0.1';               // 資料庫主機(ip)
     $db_port = 3306;                      // 資料庫 port number
@@ -22,4 +22,3 @@ try {
 } catch (PDOException $e) {
     exit();
 }
-?>
