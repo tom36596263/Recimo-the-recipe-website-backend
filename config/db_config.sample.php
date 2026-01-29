@@ -3,7 +3,7 @@ if( str_contains($_SERVER["HTTP_HOST"], "127.0.0.1") || str_contains($_SERVER["H
     // localhost
     $db_host = '127.0.0.1';
     $db_port = 8889;
-    $db_dbname = 'recimo';
+    $db_dbname = 'tibamefe_cjd102g2';
 
     $db_user = 'root';
     $db_password = 'root';
