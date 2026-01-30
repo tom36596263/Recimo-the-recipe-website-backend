@@ -10,3 +10,5 @@ db_config.php
 .DS_Store
 Thumbs.db
 .github
+
+config/db_config.php
