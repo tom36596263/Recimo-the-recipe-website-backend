@@ -144,104 +144,117 @@ try {
 
     // --- 功能 B：更新商品資料 (POST) ---
 
+// --- 功能 B：更新商品資料 (POST) ---
+// --- 功能 B：更新商品資料 (POST) ---
 else if ($method === 'POST' && $action === 'update') {
-        
-        // 💡 修正 1：統一改用 $_POST 拿資料，因為 Vue 傳的是 FormData
-        $productId = $_POST['product_id'] ?? null;
-        
-        if (!$productId) {
-            echo json_encode(['status' => 'error', 'message' => '缺少商品ID', 'debug_data' => $_POST]);
-            exit;
-        }
+    
+    // 💡 核心修正：同時支援 JSON 和 FormData
+    $json = file_get_contents('php://input');
+    $data = json_decode($json, true);
 
-      $finalImages = [];
-$maxExistingId = 0;
+    // 優先從 JSON 取值，若無則從 $_POST 取值
+    $productId = $data['product_id'] ?? $_POST['product_id'] ?? null;
+    $productRelease = $data['product_release'] ?? $_POST['product_release'] ?? null;
+    $productName = $data['product_name'] ?? $_POST['product_name'] ?? null;
 
-// 1. 先處理舊圖片，並找出目前最大的 ID
-if (isset($_POST['existing_images'])) {
-    foreach ($_POST['existing_images'] as $url) {
-        // 這裡我們需要從原本的資料庫取出 ID，但因為 FormData 只傳了 URL
-        // 建議前端 saveProductData 時把 id 也傳過來，或者這裡我們先假設一個遞增
-        $maxExistingId++; 
-        $finalImages[] = [
-            'id' => $maxExistingId,
-            'is_cover' => ($maxExistingId === 1),
-            'image_url' => "img/mall/" . basename($url)
-        ];
+    if (!$productId) {
+        echo json_encode([
+            'status' => 'error', 
+            'message' => '缺少商品ID',
+            'debug_post' => $_POST,
+            'debug_json' => $data
+        ]);
+        exit;
     }
-}
 
-// 2. 處理新上傳圖片
-if (isset($_FILES['product_images'])) {
-    $uploadDir = __DIR__ . '/../img/mall/'; 
-    $imgCounter = $maxExistingId + 1; // 從舊有 ID 之後開始算
+    // 💡 判斷是否為「完整更新」
+    $isFullUpdate = isset($productName);
 
-    foreach ($_FILES['product_images']['tmp_name'] as $key => $tmpName) {
-        if ($_FILES['product_images']['error'][$key] === UPLOAD_ERR_OK) {
-            $fileExt = pathinfo($_FILES['product_images']['name'][$key], PATHINFO_EXTENSION);
-            $newFileName = uniqid('prod_') . '.' . $fileExt;
-            
-            if (move_uploaded_file($tmpName, $uploadDir . $newFileName)) {
+    if (!$isFullUpdate) {
+        // --- 模式 1：快速上下架 ---
+        $sql = "UPDATE products SET PRODUCT_RELEASE = :release WHERE PRODUCT_ID = :id";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([
+            ':release' => $productRelease ?? 1,
+            ':id'      => $productId
+        ]);
+        echo json_encode(['status' => 'success', 'message' => '上下架成功']);
+        exit; 
+    } else {
+        // --- 模式 2：完整更新商品資料 ---
+        $finalImages = [];
+        $maxExistingId = 0;
+
+        // 1. 處理舊圖片 (編輯模式下通常是 FormData)
+        if (isset($_POST['existing_images']) && is_array($_POST['existing_images'])) {
+            foreach ($_POST['existing_images'] as $url) {
+                $maxExistingId++; 
                 $finalImages[] = [
-                    'id' => $imgCounter++, // 這裡會接續下去
-                    'is_cover' => (count($finalImages) === 0), 
-                    'image_url' => "img/mall/" . $newFileName
+                    'id' => $maxExistingId,
+                    'is_cover' => ($maxExistingId === 1),
+                    'image_url' => "img/mall/" . basename($url)
                 ];
             }
         }
-    }
-}
+
+        // 2. 處理新圖片
+        if (isset($_FILES['product_images'])) {
+            $uploadDir = __DIR__ . '/../img/mall/'; 
+            $imgCounter = $maxExistingId + 1;
+            foreach ($_FILES['product_images']['tmp_name'] as $key => $tmpName) {
+                if ($_FILES['product_images']['error'][$key] === UPLOAD_ERR_OK) {
+                    $fileExt = pathinfo($_FILES['product_images']['name'][$key], PATHINFO_EXTENSION);
+                    $newFileName = uniqid('prod_') . '.' . $fileExt;
+                    if (move_uploaded_file($tmpName, $uploadDir . $newFileName)) {
+                        $finalImages[] = [
+                            'id' => $imgCounter++,
+                            'is_cover' => (count($finalImages) === 0), 
+                            'image_url' => "img/mall/" . $newFileName
+                        ];
+                    }
+                }
+            }
+        }
 
         $jsonImages = json_encode($finalImages, JSON_UNESCAPED_UNICODE);
 
-        // 💡 修正 2：所有的繫結變數都改用 $_POST
         $sql = "UPDATE products SET 
-                PRODUCT_NAME = :name, 
-                PRODUCT_CATEGORY = :cat, 
-                PRODUCT_PRICE = :price, 
-                PRODUCT_DESCRIPTION = :descr,
-                PRODUCT_RELEASE = :release,
-                PRODUCT_KCAL = :kcal,
-                PRODUCT_CARBS = :carbs,
-                PRODUCT_FAT = :fat,
-                PRODUCT_FIBER = :fiber,
-                PRODUCT_PROTEIN = :protein,
-                PRODUCT_SATURATED_FAT = :st_fat, 
-                PRODUCT_SUGAR = :sugar,
-                PRODUCT_SODIUM = :sodium,
-                PRODUCT_INGREDIENTS = :ingredients,
-                PRODUCT_COOKING_METHOD = :cooking,
-                PRODUCT_STORAGE_METHOD = :storage,
-                PRODUCT_REMINDER = :reminder,
-                PRODUCT_IMAGE = :images
+                PRODUCT_NAME = :name, PRODUCT_CATEGORY = :cat, PRODUCT_PRICE = :price, 
+                PRODUCT_DESCRIPTION = :descr, PRODUCT_RELEASE = :release, PRODUCT_KCAL = :kcal,
+                PRODUCT_CARBS = :carbs, PRODUCT_FAT = :fat, PRODUCT_FIBER = :fiber,
+                PRODUCT_PROTEIN = :protein, PRODUCT_SATURATED_FAT = :st_fat, PRODUCT_SUGAR = :sugar,
+                PRODUCT_SODIUM = :sodium, PRODUCT_INGREDIENTS = :ingredients,
+                PRODUCT_COOKING_METHOD = :cooking, PRODUCT_STORAGE_METHOD = :storage,
+                PRODUCT_REMINDER = :reminder, PRODUCT_IMAGE = :images
                 WHERE PRODUCT_ID = :id";
         
         $stmt = $pdo->prepare($sql);
         $stmt->execute([
-            ':name'         => $_POST['product_name'] ?? '',
-            ':cat'          => $_POST['product_category'] ?? '',
-            ':price'        => $_POST['product_price'] ?? 0,
-            ':descr'        => $_POST['product_description'] ?? '',
-            ':release'      => $_POST['product_release'] ?? 1,
-            ':kcal'         => $_POST['product_kcal'] ?? 0,
-            ':carbs'        => $_POST['product_carbs'] ?? 0,
-            ':fat'          => $_POST['product_fat'] ?? 0,
-            ':fiber'        => $_POST['product_fiber'] ?? 0,
-            ':protein'      => $_POST['product_protein'] ?? 0,
-            ':st_fat'       => $_POST['product_saturated_fat'] ?? 0, 
-            ':sugar'        => $_POST['product_sugar'] ?? 0,
-            ':sodium'       => $_POST['product_sodium'] ?? 0,
-            ':ingredients'  => $_POST['product_ingredients'] ?? '',
-            ':cooking'      => $_POST['product_cooking_method'] ?? '', 
-            ':storage'      => $_POST['product_storage_method'] ?? '',
-            ':reminder'     => $_POST['product_reminder'] ?? '',
-            ':images'       => $jsonImages, // 💡 別忘了更新圖片欄位
-            ':id'           => $productId
+            ':name' => $_POST['product_name'] ?? '',
+            ':cat'  => $_POST['product_category'] ?? '',
+            ':price'=> $_POST['product_price'] ?? 0,
+            ':descr'=> $_POST['product_description'] ?? '',
+            ':release' => $_POST['product_release'] ?? 1,
+            ':kcal' => $_POST['product_kcal'] ?? 0,
+            ':carbs'=> $_POST['product_carbs'] ?? 0,
+            ':fat'  => $_POST['product_fat'] ?? 0,
+            ':fiber'=> $_POST['product_fiber'] ?? 0,
+            ':protein' => $_POST['product_protein'] ?? 0,
+            ':st_fat' => $_POST['product_saturated_fat'] ?? 0,
+            ':sugar' => $_POST['product_sugar'] ?? 0,
+            ':sodium' => $_POST['product_sodium'] ?? 0,
+            ':ingredients' => $_POST['product_ingredients'] ?? '',
+            ':cooking' => $_POST['product_cooking_method'] ?? '',
+            ':storage' => $_POST['product_storage_method'] ?? '',
+            ':reminder' => $_POST['product_reminder'] ?? '',
+            ':images' => $jsonImages,
+            ':id' => $productId
         ]);
 
-        echo json_encode(['status' => 'success']);
+        echo json_encode(['status' => 'success', 'message' => '商品資料已完整更新']);
         exit;
-    }// --- 功能 C：刪除商品資料 (POST 或 DELETE) ---
+    }
+}// --- 功能 C：刪除商品資料 (POST 或 DELETE) ---
 
     // else if ($method === 'POST' && $action === 'delete') {
 
