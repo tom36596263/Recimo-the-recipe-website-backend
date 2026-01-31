@@ -145,10 +145,7 @@ try {
     // --- 功能 B：更新商品資料 (POST) ---
 
 // --- 功能 B：更新商品資料 (POST) ---
-// --- 功能 B：更新商品資料 (POST) ---
 else if ($method === 'POST' && $action === 'update') {
-    
-    // 💡 核心修正：同時支援 JSON 和 FormData
     $json = file_get_contents('php://input');
     $data = json_decode($json, true);
 
@@ -158,20 +155,15 @@ else if ($method === 'POST' && $action === 'update') {
     $productName = $data['product_name'] ?? $_POST['product_name'] ?? null;
 
     if (!$productId) {
-        echo json_encode([
-            'status' => 'error', 
-            'message' => '缺少商品ID',
-            'debug_post' => $_POST,
-            'debug_json' => $data
-        ]);
+        echo json_encode(['status' => 'error', 'message' => '缺少商品ID']);
         exit;
     }
 
-    // 💡 判斷是否為「完整更新」
+    // 💡 判斷是否為「快速上下架」模式
     $isFullUpdate = isset($productName);
 
     if (!$isFullUpdate) {
-        // --- 模式 1：快速上下架 ---
+        // --- 模式 1：快速上下架 (僅更新狀態) ---
         $sql = "UPDATE products SET PRODUCT_RELEASE = :release WHERE PRODUCT_ID = :id";
         $stmt = $pdo->prepare($sql);
         $stmt->execute([
@@ -181,33 +173,50 @@ else if ($method === 'POST' && $action === 'update') {
         echo json_encode(['status' => 'success', 'message' => '上下架成功']);
         exit; 
     } else {
-        // --- 模式 2：完整更新商品資料 ---
-        $finalImages = [];
-        $maxExistingId = 0;
+        // --- 模式 2：完整更新商品資料 (包含圖片刪除與所有欄位) ---
+        $uploadDir = __DIR__ . '/../img/mall/';
 
-        // 1. 處理舊圖片 (編輯模式下通常是 FormData)
+        // 1. 先從資料庫查出「原本的圖片」做為刪除對照
+        $stmtSelect = $pdo->prepare("SELECT PRODUCT_IMAGE FROM products WHERE PRODUCT_ID = :id");
+        $stmtSelect->execute([':id' => $productId]);
+        $oldRow = $stmtSelect->fetch(PDO::FETCH_ASSOC);
+        $oldImagesArr = json_decode($oldRow['PRODUCT_IMAGE'] ?? '[]', true);
+        $oldFiles = array_map(fn($img) => basename($img['image_url']), $oldImagesArr);
+
+        $finalImages = [];
+        $keptFiles = []; 
+
+        // 2. 處理前端傳過來「要保留」的舊圖片
         if (isset($_POST['existing_images']) && is_array($_POST['existing_images'])) {
-            foreach ($_POST['existing_images'] as $url) {
-                $maxExistingId++; 
+            foreach ($_POST['existing_images'] as $index => $url) {
+                $fileName = basename($url);
+                $keptFiles[] = $fileName;
                 $finalImages[] = [
-                    'id' => $maxExistingId,
-                    'is_cover' => ($maxExistingId === 1),
-                    'image_url' => "img/mall/" . basename($url)
+                    'id' => $index + 1,
+                    'is_cover' => ($index === 0),
+                    'image_url' => "img/mall/" . $fileName
                 ];
             }
         }
 
-        // 2. 處理新圖片
+        // 3. 【真正刪除實體檔案】找出資料庫有，但前端沒傳過來的檔案
+        $filesToDelete = array_diff($oldFiles, $keptFiles);
+        foreach ($filesToDelete as $file) {
+            $target = $uploadDir . $file;
+            if (file_exists($target)) {
+                unlink($target); 
+            }
+        }
+
+        // 4. 處理新上傳圖片 (使用 uniqid 解決你換回舊圖存不進去的問題)
         if (isset($_FILES['product_images'])) {
-            $uploadDir = __DIR__ . '/../img/mall/'; 
-            $imgCounter = $maxExistingId + 1;
             foreach ($_FILES['product_images']['tmp_name'] as $key => $tmpName) {
                 if ($_FILES['product_images']['error'][$key] === UPLOAD_ERR_OK) {
                     $fileExt = pathinfo($_FILES['product_images']['name'][$key], PATHINFO_EXTENSION);
                     $newFileName = uniqid('prod_') . '.' . $fileExt;
                     if (move_uploaded_file($tmpName, $uploadDir . $newFileName)) {
                         $finalImages[] = [
-                            'id' => $imgCounter++,
+                            'id' => count($finalImages) + 1,
                             'is_cover' => (count($finalImages) === 0), 
                             'image_url' => "img/mall/" . $newFileName
                         ];
@@ -218,6 +227,7 @@ else if ($method === 'POST' && $action === 'update') {
 
         $jsonImages = json_encode($finalImages, JSON_UNESCAPED_UNICODE);
 
+        // 5. 【恢復所有原本欄位】執行完整資料庫更新
         $sql = "UPDATE products SET 
                 PRODUCT_NAME = :name, PRODUCT_CATEGORY = :cat, PRODUCT_PRICE = :price, 
                 PRODUCT_DESCRIPTION = :descr, PRODUCT_RELEASE = :release, PRODUCT_KCAL = :kcal,
@@ -230,28 +240,28 @@ else if ($method === 'POST' && $action === 'update') {
         
         $stmt = $pdo->prepare($sql);
         $stmt->execute([
-            ':name' => $_POST['product_name'] ?? '',
-            ':cat'  => $_POST['product_category'] ?? '',
-            ':price'=> $_POST['product_price'] ?? 0,
-            ':descr'=> $_POST['product_description'] ?? '',
-            ':release' => $_POST['product_release'] ?? 1,
-            ':kcal' => $_POST['product_kcal'] ?? 0,
-            ':carbs'=> $_POST['product_carbs'] ?? 0,
-            ':fat'  => $_POST['product_fat'] ?? 0,
-            ':fiber'=> $_POST['product_fiber'] ?? 0,
-            ':protein' => $_POST['product_protein'] ?? 0,
-            ':st_fat' => $_POST['product_saturated_fat'] ?? 0,
-            ':sugar' => $_POST['product_sugar'] ?? 0,
-            ':sodium' => $_POST['product_sodium'] ?? 0,
+            ':name'        => $_POST['product_name'] ?? '',
+            ':cat'         => $_POST['product_category'] ?? '',
+            ':price'       => $_POST['product_price'] ?? 0,
+            ':descr'       => $_POST['product_description'] ?? '',
+            ':release'     => $_POST['product_release'] ?? 1,
+            ':kcal'        => $_POST['product_kcal'] ?? 0,
+            ':carbs'       => $_POST['product_carbs'] ?? 0,
+            ':fat'         => $_POST['product_fat'] ?? 0,
+            ':fiber'       => $_POST['product_fiber'] ?? 0,
+            ':protein'     => $_POST['product_protein'] ?? 0,
+            ':st_fat'      => $_POST['product_saturated_fat'] ?? 0,
+            ':sugar'       => $_POST['product_sugar'] ?? 0,
+            ':sodium'      => $_POST['product_sodium'] ?? 0,
             ':ingredients' => $_POST['product_ingredients'] ?? '',
-            ':cooking' => $_POST['product_cooking_method'] ?? '',
-            ':storage' => $_POST['product_storage_method'] ?? '',
-            ':reminder' => $_POST['product_reminder'] ?? '',
-            ':images' => $jsonImages,
-            ':id' => $productId
+            ':cooking'     => $_POST['product_cooking_method'] ?? '',
+            ':storage'     => $_POST['product_storage_method'] ?? '',
+            ':reminder'    => $_POST['product_reminder'] ?? '',
+            ':images'      => $jsonImages,
+            ':id'          => $productId
         ]);
 
-        echo json_encode(['status' => 'success', 'message' => '商品資料已完整更新']);
+        echo json_encode(['status' => 'success', 'message' => '商品資料與圖片同步更新成功']);
         exit;
     }
 }// --- 功能 C：刪除商品資料 (POST 或 DELETE) ---
