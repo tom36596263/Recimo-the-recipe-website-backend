@@ -1,9 +1,25 @@
 <?php
+// 檔案位置：C:\MAMP\htdocs\recimo_api\recipes\recipe_tags_get.php
+
 require_once '../config/cors.php';
 require_once '../config/db_config.php';
 
 // 設定回傳格式為 JSON
 header('Content-Type: application/json; charset=utf-8');
+
+/**
+ * 取得特定食譜的所有標籤
+ * (你拆出來的功能，放在檔案上方或 require 其他檔案皆可)
+ */
+function getRecipeTags($pdo, $recipe_id) {
+    $sql = "SELECT rt.tag_id, t.tag_name, t.tag_type
+            FROM recipe_tag rt
+            JOIN tags t ON rt.tag_id = t.tag_id
+            WHERE rt.recipe_id = ?";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([$recipe_id]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
 
 $method = $_SERVER['REQUEST_METHOD'];
 
@@ -36,7 +52,7 @@ try {
     }
     $result['main'] = $main;
 
-    // --- 2. 取得主食譜食材 (修正欄位為 ri.remark) ---
+    // --- 2. 取得主食譜食材 ---
     $sqlIng = "SELECT ri.*, i.ingredient_name, i.kcal_per_100g, i.protein_per_100g, 
                         i.fat_per_100g, i.carbs_per_100g, i.gram_conversion,
                         ri.remark 
@@ -51,9 +67,9 @@ try {
     $sqlSteps = "SELECT step_id, recipe_id, step_order, step_title, step_content, step_image_url, 
                         step_total_time, 
                         TIME_TO_SEC(step_total_time) as total_seconds 
-                 FROM steps 
-                 WHERE recipe_id = ? 
-                 ORDER BY step_order ASC";
+                    FROM steps 
+                    WHERE recipe_id = ? 
+                    ORDER BY step_order ASC";
     $stmt = $pdo->prepare($sqlSteps);
     $stmt->execute([$recipe_id]);
     $steps = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -67,18 +83,12 @@ try {
     }
     $result['steps'] = $steps;
 
-    // --- 4. 取得標籤 ---
-    $sqlTags = "SELECT rt.tag_id, t.tag_name, t.tag_type
-                FROM recipe_tag rt
-                JOIN tags t ON rt.tag_id = t.tag_id
-                WHERE rt.recipe_id = ?";
-    $stmt = $pdo->prepare($sqlTags);
-    $stmt->execute([$recipe_id]);
-    $result['tags'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    // --- 4. 取得主食譜標籤 (使用拆出的函式) ---
+    $result['tags'] = getRecipeTags($pdo, $recipe_id);
 
     // --- 4.5 核心修正：取得改編版本及其完整詳細資料 ---
     $sqlAdaptations = "SELECT * FROM recipes 
-                       WHERE parent_recipe_id = ? AND recipe_id != ?";
+                        WHERE parent_recipe_id = ? AND recipe_id != ?";
     $stmtAdapt = $pdo->prepare($sqlAdaptations);
     $stmtAdapt->execute([$recipe_id, $recipe_id]);
     $adaptations = $stmtAdapt->fetchAll(PDO::FETCH_ASSOC);
@@ -86,10 +96,10 @@ try {
     foreach ($adaptations as &$child) {
         $child_id = $child['recipe_id'];
 
-        // A. 抓取該改編版本的食材 (統一欄位為 ri.remark)
+        // A. 抓取該改編版本的食材
         $sqlChildIng = "SELECT ri.*, i.ingredient_name, i.kcal_per_100g, i.protein_per_100g, 
-                               i.fat_per_100g, i.carbs_per_100g, i.gram_conversion,
-                               ri.remark
+                                i.fat_per_100g, i.carbs_per_100g, i.gram_conversion,
+                                ri.remark
                         FROM recipe_ingredients ri
                         JOIN ingredients i ON ri.ingredient_id = i.ingredient_id
                         WHERE ri.recipe_id = ?";
@@ -99,9 +109,9 @@ try {
 
         // B. 抓取該改編版本的步驟
         $sqlChildSteps = "SELECT *, TIME_TO_SEC(step_total_time) as total_seconds 
-                          FROM steps 
-                          WHERE recipe_id = ? 
-                          ORDER BY step_order ASC";
+                            FROM steps 
+                            WHERE recipe_id = ? 
+                            ORDER BY step_order ASC";
         $stmtChildSteps = $pdo->prepare($sqlChildSteps);
         $stmtChildSteps->execute([$child_id]);
         $child_steps = $stmtChildSteps->fetchAll(PDO::FETCH_ASSOC);
@@ -115,6 +125,9 @@ try {
             $c_step['step_ingredients'] = $stmtCSI->fetchAll(PDO::FETCH_COLUMN);
         }
         $child['steps'] = $child_steps;
+
+        // D. 抓取改編版本的標籤 (同樣使用函式)
+        $child['tags'] = getRecipeTags($pdo, $child_id);
     }
     
     $result['adaptations'] = $adaptations;
@@ -126,7 +139,7 @@ try {
     ], JSON_UNESCAPED_UNICODE);
 
 } catch (Exception $e) {
-    // 🏆 安全處理：確保 http_response_code 只接收整數
+    // 安全處理：確保 http_response_code 只接收整數
     $code = $e->getCode();
     if (!is_int($code) || $code < 100 || $code > 599) {
         $code = 500;
