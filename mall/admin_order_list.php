@@ -1,11 +1,12 @@
 <?php
-session_start();
+// ---------------------------------------------------------
+// 第一步：引入設定 (移除 session_start，改用純傳參)
+// ---------------------------------------------------------
 require_once '../config/cors.php';
 require_once '../config/db_config.php';
 
 header("Content-Type: application/json; charset=UTF-8");
 
-// 後台通常不一定需要 Credentials，但如果管理員也是用 Session 登入則需要
 if (isset($_SERVER['HTTP_ORIGIN'])) {
     header("Access-Control-Allow-Origin: " . $_SERVER['HTTP_ORIGIN']);
     header("Access-Control-Allow-Credentials: true");
@@ -13,16 +14,18 @@ if (isset($_SERVER['HTTP_ORIGIN'])) {
 
 try {
     // ---------------------------------------------------------
-    // 1. 權限檢查：檢查是否為管理員
+    // 第二步：從 URL 獲取參數 (order_id 與 admin_id)
     // ---------------------------------------------------------
-    // 請確認你登入後台時存的 Session Key (例如 isAdmin 或 admin_id)
-    if (!isset($_SESSION['isAdmin']) || $_SESSION['isAdmin'] !== true) {
+    $order_id = $_GET['id'] ?? null;
+    $admin_id = $_GET['admin_id'] ?? null; // 從前端傳過來的管理員 ID
+
+    // 權限初步檢查：確保有傳 admin_id
+    if (!$admin_id) {
         http_response_code(403);
-        echo json_encode(["error" => "權限不足，僅限管理員存取"]);
+        echo json_encode(["error" => "權限不足，未提供管理員 ID"]);
         exit;
     }
 
-    $order_id = $_GET['id'] ?? null;
     if (!$order_id) {
         http_response_code(400);
         echo json_encode(["error" => "未提供訂單 ID"]);
@@ -30,8 +33,9 @@ try {
     }
 
     // ---------------------------------------------------------
-    // 2. 查詢「訂單主檔」 (注意：不需要加 user_id = :uid，管理員全都能看)
+    // 第三步：查詢「訂單主檔」
     // ---------------------------------------------------------
+    // 這裡維持原樣，管理員可以查看所有人的訂單
     $sql_order = "SELECT o.*, u.user_name, u.user_email 
                   FROM orders o
                   JOIN users u ON o.user_id = u.user_id
@@ -47,14 +51,19 @@ try {
     }
 
     // ---------------------------------------------------------
-    // 3. 查詢「訂單產品明細」
+    // 第四步：查詢「訂單產品明細」
     // ---------------------------------------------------------
     $sql_items = "SELECT * FROM order_products WHERE order_id = :oid";
     $stmt_items = $pdo->prepare($sql_items);
     $stmt_items->execute([':oid' => $order_id]);
     $items = $stmt_items->fetchAll(PDO::FETCH_ASSOC);
 
+    // ---------------------------------------------------------
+    // 第五步：回傳結果 (可選擇性帶回 admin_id 確認)
+    // ---------------------------------------------------------
     $order['items'] = $items;
+    $order['accessed_by_admin'] = $admin_id; // 讓前端知道是誰在讀取
+
     echo json_encode($order, JSON_UNESCAPED_UNICODE);
 
 } catch (PDOException $e) {
