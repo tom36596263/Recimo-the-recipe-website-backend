@@ -1,67 +1,90 @@
 <?php
-// 1. 移除 session_start();
+// 1. 開啟錯誤顯示，方便除錯
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
 require_once '../config/cors.php';
 require_once '../config/db_config.php'; 
 
-// 2. 設定回傳格式與處理 CORS (移除 Credentials 限制，因為不用 Session)
 header("Content-Type: application/json; charset=UTF-8");
+
+// CORS
 if (isset($_SERVER['HTTP_ORIGIN'])) {
     header("Access-Control-Allow-Origin: " . $_SERVER['HTTP_ORIGIN']);
     header("Access-Control-Allow-Methods: POST, OPTIONS");
     header("Access-Control-Allow-Headers: Content-Type");
 }
 
-// 3. 接收前端 Vue 傳來的 JSON 資料
-$json = file_get_contents("php://input");
-$data = json_decode($json, true);
-
-// 4. 從 JSON 內容中取得 user_id 與資料檢查
-$user_id = $data['user_id'] ?? null;
-
-if (!$user_id) {
-    http_response_code(400);
-    echo json_encode(["error" => "缺少使用者 ID，無法結帳"]);
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-if (!$data || !isset($data['items']) || empty($data['items'])) {
+$json = file_get_contents("php://input");
+$data = json_decode($json, true);
+
+$user_id = $data['user_id'] ?? null;
+$raw_payment_method = $data['payment_method'] ?? 'cod'; // 取得前端傳來的文字 'card' 或 'cod'
+
+// 🌟 核心修正：將文字轉成資料庫要的數字
+// 假設定義：1 = 信用卡 (card), 2 = 貨到付款 (cod)
+$payment_method_int = 2; // 預設為貨到付款
+$payment_status_int = 0; // 預設未付款
+
+if ($raw_payment_method === 'card') {
+    $payment_method_int = 1;
+    $payment_status_int = 1; // 信用卡視為已付款
+} else {
+    $payment_method_int = 2; // 貨到付款
+    $payment_status_int = 0; // 貨到付款視為未付款
+}
+
+if (!$user_id) {
     http_response_code(400);
-    echo json_encode(["error" => "購物車內容為空"]);
+    echo json_encode(["error" => "User ID missing"]);
+    exit;
+}
+
+if (empty($data['items'])) {
+    http_response_code(400);
+    echo json_encode(["error" => "Cart is empty"]);
     exit;
 }
 
 try {
-    // 🔥 開始資料庫交易 (Transaction)
     $pdo->beginTransaction();
 
-    // 5. 第一步：新增「訂單主檔」(orders 表)
-    $sql_order = "INSERT INTO orders (
-        user_id, subtotal, discount_amount, shipping_fee, total_amount, 
-        recipient_name, recipient_phone, shipping_address, 
-        order_status, payment_method, payment_status, created
-    ) VALUES (
-        :uid, :sub, :dis, :fee, :total, 
-        :name, :phone, :addr, 
-        1, :pay_m, 0, NOW()
-    )";
-
+    // 2. 新增訂單
+    // 注意 :pay_m 和 :pay_s 現在使用轉換後的數字
+   // 1. 修改 SQL 語句：加入 logistics_id
+$sql_order = "INSERT INTO orders (
+    user_id, logistics_id, subtotal, discount_amount, shipping_fee, total_amount, 
+    recipient_name, recipient_phone, shipping_address, 
+    order_status, payment_method, payment_status, created
+) VALUES (
+    :uid, :lid, :sub, :dis, :fee, :total, 
+    :name, :phone, :addr, 
+    0, :pay_m, :pay_s, NOW()
+)";
+$random_logistics_id = rand(1000000, 9999999);
     $stmt = $pdo->prepare($sql_order);
-    $stmt->execute([
-        ':uid'   => $user_id, // 改由前端 JSON 傳入的 ID
-        ':sub'   => $data['subtotal'],
-        ':dis'   => $data['discount_amount'] ?? 0,
-        ':fee'   => $data['shipping_fee'] ?? 0,
-        ':total' => $data['total_amount'],
-        ':name'  => $data['recipient_name'],
-        ':phone' => $data['recipient_phone'],
-        ':addr'  => $data['shipping_address'],
-        ':pay_m' => $data['payment_method'] ?? 1
-    ]);
+$stmt->execute([
+    ':uid'   => $user_id,
+    ':lid'   => $random_logistics_id, // 🌟 新增這一行：接收前端傳來的 logistics_id
+    ':sub'   => $data['subtotal'],
+    ':dis'   => $data['discount_amount'] ?? 0,
+    ':fee'   => $data['shipping_fee'] ?? 0,
+    ':total' => $data['total_amount'],
+    ':name'  => $data['recipient_name'],
+    ':phone' => $data['recipient_phone'],
+    ':addr'  => $data['shipping_address'],
+    ':pay_m' => $payment_method_int,
+    ':pay_s' => $payment_status_int
+]);
 
-    // 🔥 獲取剛才自動產生的 order_id
     $new_order_id = $pdo->lastInsertId();
 
-    // 6. 第二步：迴圈新增「訂單產品明細」(order_product 表)
+    // 3. 新增明細
     $sql_item = "INSERT INTO order_products (
         order_id, product_id, product_name, snapshot_price, quantity, subtotal
     ) VALUES (
@@ -81,20 +104,26 @@ try {
         ]);
     }
 
-    // 🔥 提交交易
+    // 4. 清空購物車
+    // ⚠️ 這裡要確認你的資料表是 carts 還是 cart
+    // 如果之前 debug_db.php 顯示是 cart (沒有s)，請把下面改成 FROM cart
+    $sql_clear = "DELETE FROM carts WHERE user_id = :uid";
+    $stmt_clear = $pdo->prepare($sql_clear);
+    $stmt_clear->execute([':uid' => $user_id]);
+
     $pdo->commit();
 
-    // 7. 回傳結果
     echo json_encode([
         "success"  => true,
-        "message"  => "訂單已成功建立",
+        "message"  => "Success",
         "order_id" => $new_order_id
-    ], JSON_UNESCAPED_UNICODE);
+    ]);
 
 } catch (PDOException $e) {
     if ($pdo->inTransaction()) {
         $pdo->rollBack();
     }
     http_response_code(500);
-    echo json_encode(["error" => "結帳失敗: " . $e->getMessage()]);
+    echo json_encode(["error" => $e->getMessage()]);
 }
+?>
