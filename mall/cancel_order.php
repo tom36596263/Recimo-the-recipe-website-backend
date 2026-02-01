@@ -17,12 +17,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 try {
-    // 2. 獲取前端資料
     $json = file_get_contents("php://input");
     $data = json_decode($json, true) ?? [];
 
-    $user_id = $data['user_id'] ?? null;
-    $order_id = $data['order_id'] ?? null;
+    $user_id = isset($data['user_id']) ? (int)$data['user_id'] : null;
+    $order_id = isset($data['order_id']) ? (int)$data['order_id'] : null;
 
     if (!$user_id || !$order_id) {
         http_response_code(400);
@@ -30,37 +29,31 @@ try {
         exit;
     }
 
+    // --- 修正點：先檢查，再開 Transaction，或者確保只開一次 ---
     $pdo->beginTransaction();
 
-    // ---------------------------------------------------------
-    // 3. 修改處：檢查狀態是否為 0 (新訂單) 或 1 (已確認)
-    // ---------------------------------------------------------
     $sql_check = "SELECT order_id FROM orders 
                   WHERE order_id = :oid AND user_id = :uid 
-                  AND order_status IN (0, 1)";
+                  AND order_status IN (0, 1) FOR UPDATE"; // 加上 FOR UPDATE 鎖定該列
     
     $stmt_check = $pdo->prepare($sql_check);
     $stmt_check->execute([':oid' => $order_id, ':uid' => $user_id]);
-    
     $order = $stmt_check->fetch();
 
     if (!$order) {
-        // 如果找不到，可能是訂單不存在，或是狀態已經變成 2(已出貨) 以上了
+        // 找不到資料，立刻回滾並結束
+        $pdo->rollBack(); 
         http_response_code(403);
-        echo json_encode([
-            "success" => false, 
-            "error" => "訂單目前狀態不可取消（可能已進入出貨程序）"
-        ], JSON_UNESCAPED_UNICODE);
-        $pdo->rollBack();
+        echo json_encode(["success" => false, "error" => "訂單狀態已改變，無法取消"]);
         exit;
     }
 
-    // 4. 執行取消 (更新狀態為 -1)
+    // 執行更新
     $sql_update = "UPDATE orders SET order_status = -1 WHERE order_id = :oid";
     $stmt_up = $pdo->prepare($sql_update);
     $stmt_up->execute([':oid' => $order_id]);
 
-    // 5. 提交
+    // 提交事務
     $pdo->commit();
 
     echo json_encode([
@@ -69,6 +62,7 @@ try {
     ], JSON_UNESCAPED_UNICODE);
 
 } catch (PDOException $e) {
+    // 只有在事務還活著的時候才回滾
     if ($pdo->inTransaction()) {
         $pdo->rollBack();
     }
