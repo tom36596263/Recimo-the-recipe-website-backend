@@ -7,7 +7,7 @@
 // 第一步：引入 CORS 權限設定 (必須放在程式碼最上方)
 // ---------------------------------------------------------
 require_once '../config/cors.php';
-
+session_start();
 // ---------------------------------------------------------
 // 第二步：引入資料庫連線設定
 // ---------------------------------------------------------
@@ -45,6 +45,7 @@ try {
         // $password 是前端傳來的明碼，$user['user_password'] 是資料庫裡的雜湊值
         if (password_verify($password, $user['user_password'])) {
             // 密碼正確！
+            $_SESSION['user_id'] = $user['user_id'];
             echo json_encode([
                 "status" => "success",
                 "message" => "登入成功",
@@ -54,6 +55,8 @@ try {
                     "image" => $user['user_url']
                 ]
             ]);
+            // 將 exit 放在最後確保輸出後停止
+            exit;
         } else {
             // 不要講太細
             echo json_encode(["status" => "error", "message" => "帳號或密碼錯誤"]);
