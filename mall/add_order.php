@@ -1,5 +1,5 @@
 <?php
-// 1. 開啟錯誤顯示，方便除錯
+//開啟錯誤顯示，方便除錯
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
@@ -26,7 +26,7 @@ $data = json_decode($json, true);
 $user_id = $data['user_id'] ?? null;
 $raw_payment_method = $data['payment_method'] ?? 'cod'; // 取得前端傳來的文字 'card' 或 'cod'
 
-// 🌟 核心修正：將文字轉成資料庫要的數字
+//將文字轉成資料庫要的數字
 // 假設定義：1 = 信用卡 (card), 2 = 貨到付款 (cod)
 $payment_method_int = 2; // 預設為貨到付款
 $payment_status_int = 0; // 預設未付款
@@ -54,9 +54,9 @@ if (empty($data['items'])) {
 try {
     $pdo->beginTransaction();
 
-    // 2. 新增訂單
+    // 2新增訂單
     // 注意 :pay_m 和 :pay_s 現在使用轉換後的數字
-   // 1. 修改 SQL 語句：加入 logistics_id
+   // 修改 SQL 語句：加入 logistics_id
 $sql_order = "INSERT INTO orders (
     user_id, logistics_id, subtotal, discount_amount, shipping_fee, total_amount, 
     recipient_name, recipient_phone, shipping_address, 
@@ -70,7 +70,7 @@ $random_logistics_id = rand(1000000, 9999999);
     $stmt = $pdo->prepare($sql_order);
 $stmt->execute([
     ':uid'   => $user_id,
-    ':lid'   => $random_logistics_id, // 🌟 新增這一行：接收前端傳來的 logistics_id
+    ':lid'   => $random_logistics_id, //接收前端傳來的 logistics_id
     ':sub'   => $data['subtotal'],
     ':dis'   => $data['discount_amount'] ?? 0,
     ':fee'   => $data['shipping_fee'] ?? 0,
@@ -84,7 +84,7 @@ $stmt->execute([
 
     $new_order_id = $pdo->lastInsertId();
 
-    // 3. 新增明細
+    //新增明細
     $sql_item = "INSERT INTO order_products (
         order_id, product_id, product_name, snapshot_price, quantity, subtotal
     ) VALUES (
@@ -104,8 +104,8 @@ $stmt->execute([
         ]);
     }
 
-    // 4. 清空購物車
-    // ⚠️ 這裡要確認你的資料表是 carts 還是 cart
+    // 清空購物車
+    // 這裡要確認你的資料表是 carts 還是 cart
     // 如果之前 debug_db.php 顯示是 cart (沒有s)，請把下面改成 FROM cart
     $sql_clear = "DELETE FROM carts WHERE user_id = :uid";
     $stmt_clear = $pdo->prepare($sql_clear);
