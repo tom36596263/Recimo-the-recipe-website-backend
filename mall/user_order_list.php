@@ -48,6 +48,6 @@ try {
     http_response_code(500);
     echo json_encode(["error" => "系統錯誤: " . $e->getMessage()]);
 }
-// 在 $stmt->execute 之前加入
-file_put_contents('debug.txt', "收到前端傳來的 UID: " . $current_user_id . " | 類型: " . gettype($current_user_id) . "\n", FILE_APPEND);
+// // 在 $stmt->execute 之前加入
+// file_put_contents('debug.txt', "收到前端傳來的 UID: " . $current_user_id . " | 類型: " . gettype($current_user_id) . "\n", FILE_APPEND);
 
