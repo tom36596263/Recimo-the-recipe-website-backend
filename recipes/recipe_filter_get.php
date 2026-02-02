@@ -1,14 +1,5 @@
 <?php
-header('Access-Control-Allow-Origin: http://localhost:5173'); 
-header('Access-Control-Allow-Credentials: true');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
-
-if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
-    exit;
-}
-
-header('Content-Type: application/json');
+require_once '../config/cors.php';
 require_once '../config/db_config.php';
 
 $timeFilt       = $_GET['time'] ?? '全部';
@@ -25,7 +16,7 @@ $sql = "SELECT r.*,
         LEFT JOIN recipe_tag rt ON r.recipe_id = rt.recipe_id
         LEFT JOIN tags t ON rt.tag_id = t.tag_id
         LEFT JOIN recipe_ingredients ri ON r.recipe_id = ri.recipe_id
-        WHERE 1=1";
+        WHERE r.parent_recipe_id IS NULL";;
 
 // --- A. 製作時長過濾 (注意：資料庫是 TIME 格式或秒數，這裡假設處理方式) ---
 if ($timeFilt !== '全部') {
