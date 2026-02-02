@@ -43,26 +43,42 @@ try {
     // 3. 執行更新邏輯 (如果有傳入新狀態)
     // ---------------------------------------------------------
     $update_message = "";
-    if ($new_order_status !== null || $new_payment_status !== null) {
-        $fields = [];
-        $params = [':oid' => $order_id];
+if ($new_order_status !== null) {
+    // 先查出目前的訂單狀況
+    $sql_check = "SELECT payment_method, payment_status FROM orders WHERE order_id = :oid";
+    $stmt_check = $pdo->prepare($sql_check);
+    $stmt_check->execute([':oid' => $order_id]);
+    $current = $stmt_check->fetch(PDO::FETCH_ASSOC);
 
-        if ($new_order_status !== null) {
-            $fields[] = "order_status = :ostatus";
-            $params[':ostatus'] = $new_order_status;
-        }
-        if ($new_payment_status !== null) {
+    if ($current) {
+        $fields = ["order_status = :ostatus"];
+        $params = [
+            ':oid' => $order_id, 
+            ':ostatus' => $new_order_status
+        ];
+
+        $target_status = intval($new_order_status);
+        $curr_pay_status = intval($current['payment_status']);
+        $curr_pay_method = intval($current['payment_method']);
+
+        // --- 修正重點：信用卡(1) + 取消(-1) + 目前是已付(1) -> 設為已退款(2) ---
+        if ($target_status === -1 && $curr_pay_method === 1 && $curr_pay_status === 1) {
             $fields[] = "payment_status = :pstatus";
-            $params[':pstatus'] = $new_payment_status;
+            $params[':pstatus'] = 2; // 2 代表已退款
+            $update_message = "訂單已取消，信用卡款項已自動更新為「已退款」。";
+        }
+        // 貨到付款(2) + 送達(3) -> 設為已付(1)
+        else if ($target_status === 3 && $curr_pay_method === 2) {
+            $fields[] = "payment_status = :pstatus";
+            $params[':pstatus'] = 1;
+            $update_message = "訂單已送達，貨到付款狀態更新為「已付」。";
         }
 
-        // 執行更新
         $sql_update = "UPDATE orders SET " . implode(', ', $fields) . " WHERE order_id = :oid";
         $stmt_up = $pdo->prepare($sql_update);
         $stmt_up->execute($params);
-        $update_message = "訂單 #$order_id 狀態更新成功。";
     }
-
+}
     // ---------------------------------------------------------
     // 4. 查詢完整訂單資料 (主檔 + 明細)
     // ---------------------------------------------------------
