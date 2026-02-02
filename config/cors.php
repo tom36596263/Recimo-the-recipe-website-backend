@@ -14,6 +14,9 @@ $allowed_origins = [
 if (in_array($origin, $allowed_origins)) {
     // 這裡不能寫 *，必須精確回傳該來源網址
     header("Access-Control-Allow-Origin: " . $origin);
+} else {
+    // 偵錯用：如果不在白名單，開發階段可以先暫時允許 localhost:5173 確保連通
+    header("Access-Control-Allow-Origin: http://localhost:5173");
 }
 
 // 4. 允許攜帶 Cookie / Session
