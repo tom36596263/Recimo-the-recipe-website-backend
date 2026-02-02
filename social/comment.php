@@ -9,7 +9,6 @@ $input = json_decode(file_get_contents('php://input'), true);
 
 try {
     switch ($method) {
-        // --- 1. 取得留言列表 (GET) ---
         case 'GET':
             $recipe_id = $_GET['recipe_id'] ?? '';
             if (!$recipe_id) {
@@ -23,14 +22,12 @@ try {
             echo json_encode($stmt->fetchAll(PDO::FETCH_ASSOC), JSON_UNESCAPED_UNICODE);
             break;
 
-        // --- 2. 新增留言 & 點讚 (POST) ---
         case 'POST':
-            $action = $input['action'] ?? 'post'; // 預設為新增留言
+            $action = $input['action'] ?? 'post';
 
             if ($action === 'like') {
-                // --- 點讚/取消點讚功能 ---
                 $comment_id = $input['comment_id'] ?? null;
-                $like_type = $input['type'] ?? 'like'; // 'like' or 'dislike'
+                $like_type = $input['type'] ?? 'like';
                 if (!$comment_id) throw new Exception('缺少留言 ID');
 
                 if ($like_type === 'like') {
@@ -45,24 +42,22 @@ try {
                 echo json_encode(['success' => true, 'message' => $msg]);
 
             } else {
-                // --- 一般新增留言功能 ---
                 $recipe_id = $input['recipe_id'] ?? '';
                 $user_id = $input['user_id'] ?? '';
                 $content = $input['content'] ?? '';
 
                 if (!$recipe_id || !$user_id || !$content) throw new Exception('欄位不得為空');
 
-                $sql = 'INSERT INTO recipe_comments (recipe_id, user_id, comment_text, comment_at, is_display) 
-                        VALUES (?, ?, ?, NOW(), 1)';
+                // 補上 like_count = 0 確保嚴格模式下也能成功插入
+                $sql = 'INSERT INTO recipe_comments (recipe_id, user_id, comment_text, comment_at, is_display, like_count) 
+                        VALUES (?, ?, ?, NOW(), 1, 0)';
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute([$recipe_id, $user_id, $content]);
                 echo json_encode(['success' => true, 'message' => '新增成功']);
             }
             break;
 
-        // --- 3. 刪除留言 (DELETE) ---
         case 'DELETE':
-            // 注意：Delete 通常建議從 URL 或 JSON 取得參數
             $comment_id = $_GET['comment_id'] ?? $input['comment_id'] ?? null;
             $user_id = $_GET['user_id'] ?? $input['user_id'] ?? null;
 
@@ -86,5 +81,6 @@ try {
     }
 } catch (Exception $e) {
     http_response_code(500);
+    // 輸出具體錯誤訊息，方便你除錯
     echo json_encode(['success' => false, 'message' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
 }
