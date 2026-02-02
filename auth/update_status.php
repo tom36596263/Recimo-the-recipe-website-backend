@@ -26,9 +26,14 @@ try {
     $success = $stmt->execute([$is_active, $user_id]);
 
     if ($success) {
-        echo json_encode(["status" => "success", "message" => "狀態更新成功"]);
+        // 根據 is_active 的數值決定顯示文字
+        $status_text = ($is_active == 1) ? "已啟用" : "已停權";
+        echo json_encode([
+            "status" => "success", 
+            "message" => "會員編號 " . $user_id . " " . $status_text
+        ]);
     } else {
-        echo json_encode(["status" => "error", "message" => "更新失敗"]);
+        echo json_encode(["status" => "error", "message" => "會員編號 " . $user_id . " 狀態更新失敗"]);
     }
 
 } catch (PDOException $e) {
