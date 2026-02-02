@@ -10,7 +10,7 @@ $mode = $_GET['mode'] ?? 'public';
 $sql = $baseSelect . buildRecipeWhereClause($mode);
 
 // 2. 加上群組與排序
-$sql .= " GROUP BY r.recipe_id ORDER BY r.recipe_id DESC";
+$sql .= " GROUP BY r.recipe_id ORDER BY r.recipe_id";
 
 try {
     $stmt = $pdo->prepare($sql);
