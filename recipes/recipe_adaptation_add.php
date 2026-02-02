@@ -15,16 +15,48 @@ if (!isset($input['author_id']) || empty($input['recipe_title'])) {
     exit;
 }
 
-// --- 圖片處理函式 ---
+/**
+ * 時間格式校正函式
+ * 解決 00:60:00 導致的資料庫錯誤，自動進位為正確的時分秒
+ */
+function formatDbTime($timeInput) {
+    if (empty($timeInput)) return '00:05:00';
+    
+    // 處理格式如 "00:60:00" 或 "60"
+    if (preg_match('/^(\d+):(\d+):(\d+)$/', $timeInput, $matches)) {
+        $h = (int)$matches[1];
+        $m = (int)$matches[2];
+        $s = (int)$matches[3];
+        
+        // 分秒進位處理
+        $m += floor($s / 60);
+        $s = $s % 60;
+        $h += floor($m / 60);
+        $m = $m % 60;
+    } else {
+        // 如果是純數字(分鐘)
+        $totalMinutes = intval($timeInput);
+        $h = floor($totalMinutes / 60);
+        $m = $totalMinutes % 60;
+        $s = 0;
+    }
+    
+    return sprintf('%02d:%02d:%02d', $h, $m, $s);
+}
+
+/**
+ * 圖片處理函式
+ * 將 Base64 轉換為實體檔案存入 img/recipes/{id} 資料夾
+ */
 function saveBase64Image($base64Data, $recipeId, $fileName) {
     if (empty($base64Data) || !preg_match('/^data:image\/(\w+);base64,/', $base64Data, $type)) {
-        return $base64Data; // 如果不是 base64，直接回傳原值
+        return $base64Data; // 如果不是 base64 格式，直接回傳原值
     }
     
     $data = substr($base64Data, strpos($base64Data, ',') + 1);
     $data = base64_decode($data);
     
-    // 設定儲存路徑 (對應到你的 C:\MAMP\htdocs\recimo_api\img\recipes\{id})
+    // 設定儲存路徑
     $dir = "../img/recipes/" . $recipeId;
     if (!is_dir($dir)) {
         mkdir($dir, 0777, true);
@@ -48,13 +80,17 @@ try {
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())"; 
 
     $stmt = $pdo->prepare($sqlMain);
+    
+    // 同時校正主食譜的總時間
+    $mainTotalTime = formatDbTime($input['total_time'] ?? $input['recipe_total_time'] ?? '00:30:00');
+
     $stmt->execute([
         $input['parent_recipe_id'] ?? null,
         $input['author_id'],
         $input['recipe_title'],
         $input['recipe_description'] ?? '', 
-        '', // 先留空，等拿到 ID 後再更新路徑
-        $input['total_time'] ?? $input['recipe_total_time'] ?? '00:30:00',
+        '', // 圖片路徑先留空，等拿到 ID 後再存
+        $mainTotalTime,
         $input['recipe_difficulty'] ?? $input['difficulty'] ?? 1,
         $input['recipe_servings'] ?? 1,
         0, 
@@ -85,7 +121,7 @@ try {
         }
     }
 
-    // 3. 插入步驟 (包含步驟圖片處理)
+    // 3. 插入步驟 (包含步驟圖片處理與時間格式化)
     if (!empty($input['steps'])) {
         $sqlStep = "INSERT INTO steps (recipe_id, step_order, step_title, step_content, step_image_url, step_total_time, is_modified) VALUES (?, ?, ?, ?, ?, ?, ?)";
         $stmtStep = $pdo->prepare($sqlStep);
@@ -93,13 +129,16 @@ try {
             // 處理步驟圖片
             $stepImgPath = saveBase64Image($step['step_image_url'] ?? '', $new_recipe_id, ($index + 1));
             
+            // 處理步驟時間 (校正 00:60:00 錯誤)
+            $stepTime = formatDbTime($step['step_total_time'] ?? '00:05:00');
+
             $stmtStep->execute([
                 $new_recipe_id,
                 $index + 1,
                 $step['step_title'] ?? '',
                 $step['step_content'] ?? '',
                 $stepImgPath,
-                $step['step_total_time'] ?? '00:05:00',
+                $stepTime,
                 (isset($step['is_modified']) && $step['is_modified'] === true) ? 1 : 0
             ]);
         }
