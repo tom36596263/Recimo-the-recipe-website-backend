@@ -1,4 +1,21 @@
 <?php
+// // 1. 允許 Vite 的來源 (localhost:5175)
+// header("Access-Control-Allow-Origin: http://localhost:5175");
+
+// // 2. 允許 Cookie (如果你之後要處理購物車或登入，這行必備)
+// header("Access-Control-Allow-Credentials: true");
+
+// // 3. 允許的方法
+// header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
+
+// // 4. 允許的 Header
+// header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
+
+// // 5. 處理 OPTIONS 請求（瀏覽器的預檢）
+// if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
+//     http_response_code(200);
+//     exit;
+// }
 // ---------------------------------------------------------
 // 1. 引入 CORS 權限與資料庫連線
 // ---------------------------------------------------------
