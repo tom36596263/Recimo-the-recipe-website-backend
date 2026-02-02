@@ -35,7 +35,7 @@ try {
     // ---------------------------------------------------------
     // 第三步：查詢「訂單主檔」
     // ---------------------------------------------------------
-    // 這裡維持原樣，管理員可以查看所有人的訂單
+    //管理員可以查看所有人的訂單
     $sql_order = "SELECT o.*, u.user_name, u.user_email 
                   FROM orders o
                   JOIN users u ON o.user_id = u.user_id
@@ -50,17 +50,15 @@ try {
         exit;
     }
 
-    // ---------------------------------------------------------
-    // 第四步：查詢「訂單產品明細」
-    // ---------------------------------------------------------
+  
+    // 查詢「訂單產品明細」
     $sql_items = "SELECT * FROM order_products WHERE order_id = :oid";
     $stmt_items = $pdo->prepare($sql_items);
     $stmt_items->execute([':oid' => $order_id]);
     $items = $stmt_items->fetchAll(PDO::FETCH_ASSOC);
 
-    // ---------------------------------------------------------
-    // 第五步：回傳結果 (可選擇性帶回 admin_id 確認)
-    // ---------------------------------------------------------
+ 
+    //回傳結果 (可選擇性帶回 admin_id 確認)
     $order['items'] = $items;
     $order['accessed_by_admin'] = $admin_id; // 讓前端知道是誰在讀取
 
