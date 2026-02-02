@@ -1,5 +1,4 @@
 <?php
-// 1. 移除 session_start(); 因為不再需要讀取伺服器的 session
 require_once '../config/cors.php';
 require_once '../config/db_config.php';
 
@@ -14,19 +13,26 @@ if (isset($_SERVER['HTTP_ORIGIN'])) {
 }
 
 try {
-    // 2. 取得前端傳來的 user_id
-    // 這裡我們同時相容 GET 或 POST 傳過來的資料
-    $current_user_id = $_GET['user_id'] ?? $_POST['user_id'] ?? null;
+    //取得前端傳來的 user_id
+    $current_user_id = $_GET['user_id'] ?? null;
 
-    // 3. 檢查是否有傳入 user_id
     if (!$current_user_id) {
-        http_response_code(400); // 錯誤請求
-        echo json_encode(["error" => "缺少使用者 ID (user_id)"]);
+        http_response_code(400);
+        echo json_encode(["error" => "缺少使用者 ID"], JSON_UNESCAPED_UNICODE);
         exit;
     }
 
-    // 4. 撰寫 SQL：撈出該會員的所有訂單
-    $sql = "SELECT order_id, total_amount, created, order_status, payment_status 
+
+    $sql = "SELECT 
+                order_id, 
+                total_amount, 
+                created, 
+                order_status, 
+                payment_status, 
+                payment_method,
+                recipient_name, 
+                recipient_phone,
+                logistics_id
             FROM orders 
             WHERE user_id = :uid 
             ORDER BY created DESC";
@@ -35,10 +41,13 @@ try {
     $stmt->execute([':uid' => $current_user_id]);
     $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // 5. 輸出結果
-    echo json_encode($orders, JSON_UNESCAPED_UNICODE);
+    // 即使沒訂單也回傳空陣列 [] 而不是報錯，這對前端比較友善
+    echo json_encode($orders ?: [], JSON_UNESCAPED_UNICODE);
 
 } catch (PDOException $e) {
     http_response_code(500);
-    echo json_encode(["error" => "無法取得訂單列表: " . $e->getMessage()]);
+    echo json_encode(["error" => "系統錯誤: " . $e->getMessage()]);
 }
+// 在 $stmt->execute 之前加入
+file_put_contents('debug.txt', "收到前端傳來的 UID: " . $current_user_id . " | 類型: " . gettype($current_user_id) . "\n", FILE_APPEND);
+
