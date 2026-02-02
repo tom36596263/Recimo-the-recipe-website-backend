@@ -1,12 +1,10 @@
 <?php
-header('Access-Control-Allow-Origin: http://localhost:5173');
-header('Access-Control-Allow-Credentials: true');
-header('Content-Type: application/json');
+require_once '../config/cors.php';
 require_once '../config/db_config.php';
 
 try {
     // 抓取食譜
-    $recipes = $pdo->query("SELECT * FROM recipes")->fetchAll(PDO::FETCH_ASSOC);
+    $recipes = $pdo->query("SELECT * FROM recipes WHERE parent_recipe_id IS NULL")->fetchAll(PDO::FETCH_ASSOC);
     // 抓取商品
     $products = $pdo->query("SELECT * FROM products")->fetchAll(PDO::FETCH_ASSOC);
     // 抓取關聯表

@@ -16,7 +16,7 @@ $sql = "SELECT r.*,
         LEFT JOIN recipe_tag rt ON r.recipe_id = rt.recipe_id
         LEFT JOIN tags t ON rt.tag_id = t.tag_id
         LEFT JOIN recipe_ingredients ri ON r.recipe_id = ri.recipe_id
-        WHERE 1=1";
+        WHERE r.parent_recipe_id IS NULL";;
 
 // --- A. 製作時長過濾 (注意：資料庫是 TIME 格式或秒數，這裡假設處理方式) ---
 if ($timeFilt !== '全部') {
