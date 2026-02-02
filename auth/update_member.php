@@ -1,15 +1,24 @@
 <?php
+// ---------------------------------------------------------
+// 第一步：引入 CORS 權限設定 (必須放在程式碼最上方)
+// ---------------------------------------------------------
 require_once '../config/cors.php';
+// 主要管理員才有權限
+session_start();
+
+// ---------------------------------------------------------
+// 第二步：引入資料庫連線設定
+// ---------------------------------------------------------
 require_once '../config/db_config.php';
 
+// ---------------------------------------------------------
+// 第三步：補強設定 - 宣告回傳格式為 JSON (讓前端 Axios 自動解析)
+// ---------------------------------------------------------
 header("Content-Type: application/json; charset=UTF-8");
 
 // 開啟錯誤回報 (開發環境建議)
 error_reporting(E_ALL);
 ini_set('display_errors', 0);
-
-// 主要管理員才有權限
-session_start();
 
 // 獲取管理員等級
 $admin_level = 0;
@@ -17,16 +26,15 @@ $admin_level = 0;
 // 優先判斷 POST (因為這是前端從 localStorage 傳過來最即時的)
 if (isset($_POST['current_admin_level']) && $_POST['current_admin_level'] !== '') {
     $admin_level = (int)$_POST['current_admin_level'];
-} 
+}
 // 如果 POST 沒傳，再看 Session
 elseif (isset($_SESSION['admin_level'])) {
     $admin_level = (int)$_SESSION['admin_level'];
 }
 
-// 行判斷
 if ($admin_level < 2) {
     echo json_encode([
-        "status" => "error", 
+        "status" => "error",
         "message" => "權限不足，您的等級是：" . $admin_level
     ]);
     exit;
@@ -66,6 +74,9 @@ try {
         exit;
     }
 
+    // ---------------------------------------------------------
+    // 第四步：撰寫 SQL 語句
+    // ---------------------------------------------------------
     // 檢查是否有資料變動的邏輯
     $sql = "UPDATE users SET 
                 user_name = ?, 
