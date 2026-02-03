@@ -47,24 +47,6 @@ if ($admin_level < 2) {
 //     FILE_APPEND
 // );
 
-$target_url = $_POST['user_url'] ?? ''; // 預設沿用舊的
-
-if (!empty($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
-    $uploadDir = '../uploads/member/';
-    if (!is_dir($uploadDir)) {
-        mkdir($uploadDir, 0777, true);
-    }
-
-    $ext = pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION);
-    $fileName = 'member_' . $user_id . '_' . time() . '.' . $ext;
-    $targetPath = $uploadDir . $fileName;
-
-    if (move_uploaded_file($_FILES['image']['tmp_name'], $targetPath)) {
-        // 存「對外路徑」，不是實體路徑
-        $target_url = '/uploads/member/' . $fileName;
-    }
-}
-
 try {
     // 確保 ID 是純數字且去掉可能的多餘空白
     $user_id = isset($_POST['user_id']) ? trim($_POST['user_id']) : null;
@@ -74,6 +56,23 @@ try {
         exit;
     }
 
+$target_url = $_POST['user_url'] ?? ''; // 預設沿用舊的
+
+if (!empty($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
+    $uploadDir = '../img/profile/';
+    if (!is_dir($uploadDir)) {
+        mkdir($uploadDir, 0777, true);
+    }
+
+    $ext = pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION);
+    $fileName = 'user_id=' .$user_id . '_avatar' . '_' . time() . '.' . $ext;
+    $targetPath = $uploadDir . $fileName;
+
+    if (move_uploaded_file($_FILES['image']['tmp_name'], $targetPath)) {
+        // 存「對外路徑」，不是實體路徑
+        $target_url = '/img/profile/' . $fileName;
+    }
+}
     // ---------------------------------------------------------
     // 第四步：撰寫 SQL 語句
     // ---------------------------------------------------------
