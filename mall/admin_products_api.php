@@ -117,6 +117,8 @@ try {
                     'product_sugar'          => (float)($row['PRODUCT_SUGAR'] ?? 0),
 
                     'product_sodium'         => (float)($row['PRODUCT_SODIUM'] ?? 0),
+                    
+                    'product_net_weight' => (float)($row['PRODUCT_NET_WEIGHT'] ?? 0),
 
                     'product_cooking_method' => $row['PRODUCT_COOKING_METHOD'] ?? '',
 
@@ -234,6 +236,7 @@ else if ($method === 'POST' && $action === 'update') {
                 PRODUCT_CARBS = :carbs, PRODUCT_FAT = :fat, PRODUCT_FIBER = :fiber,
                 PRODUCT_PROTEIN = :protein, PRODUCT_SATURATED_FAT = :st_fat, PRODUCT_SUGAR = :sugar,
                 PRODUCT_SODIUM = :sodium, PRODUCT_INGREDIENTS = :ingredients,
+                PRODUCT_NET_WEIGHT = :net_weight,
                 PRODUCT_COOKING_METHOD = :cooking, PRODUCT_STORAGE_METHOD = :storage,
                 PRODUCT_REMINDER = :reminder, PRODUCT_IMAGE = :images
                 WHERE PRODUCT_ID = :id";
@@ -254,6 +257,7 @@ else if ($method === 'POST' && $action === 'update') {
             ':sugar'       => $_POST['product_sugar'] ?? 0,
             ':sodium'      => $_POST['product_sodium'] ?? 0,
             ':ingredients' => $_POST['product_ingredients'] ?? '',
+            ':net_weight'  => $_POST['product_net_weight'] ?? 0,
             ':cooking'     => $_POST['product_cooking_method'] ?? '',
             ':storage'     => $_POST['product_storage_method'] ?? '',
             ':reminder'    => $_POST['product_reminder'] ?? '',
