@@ -29,7 +29,13 @@ try {
     $stmt->execute([$admin_account, $admin_password, $admin_name]);
     echo json_encode('新增成功', JSON_UNESCAPED_UNICODE);
 } catch (PDOException $e) {
-    http_response_code(500);
-    echo json_encode('資料庫錯誤: ' . $e->getMessage(), JSON_UNESCAPED_UNICODE);
+    // 1062 是 MySQL duplicate entry 錯誤碼
+    if (isset($e->errorInfo[1]) && $e->errorInfo[1] == 1062) {
+        http_response_code(409);
+        echo json_encode('帳號已存在，請更換帳號', JSON_UNESCAPED_UNICODE);
+    } else {
+        http_response_code(500);
+        echo json_encode('資料庫錯誤: ' . $e->getMessage(), JSON_UNESCAPED_UNICODE);
+    }
     exit;
 }
