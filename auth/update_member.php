@@ -70,7 +70,7 @@ if (!empty($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
 
     if (move_uploaded_file($_FILES['image']['tmp_name'], $targetPath)) {
         // 存「對外路徑」，不是實體路徑
-        $target_url = '/img/profile/' . $fileName;
+        $target_url = 'img/profile/' . $fileName;
     }
 }
     // ---------------------------------------------------------
