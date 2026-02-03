@@ -37,11 +37,19 @@ try {
 
     $result = [];
 
-    // --- 1. 取得主食譜資訊 ---
-    $sqlMain = "SELECT r1.*, r2.recipe_title as parent_recipe_title 
-                FROM recipes r1 
-                LEFT JOIN recipes r2 ON r1.parent_recipe_id = r2.recipe_id 
-                WHERE r1.recipe_id = ?";
+    // --- 1. 取得主食譜資訊 (正確對接 author_id) ---
+$sqlMain = "SELECT 
+                r.*, 
+                p.recipe_title as parent_recipe_title,
+                u.user_name as author_name,
+                u.user_id as author_id,
+                u.user_url as author_image
+            FROM recipes r
+            LEFT JOIN recipes p ON r.parent_recipe_id = p.recipe_id 
+            /* 🏆 關鍵修正：使用資料表實際存在的 author_id 欄位 */
+            LEFT JOIN users u ON r.author_id = u.user_id 
+            WHERE r.recipe_id = ?
+            LIMIT 1";
     $stmt = $pdo->prepare($sqlMain);
     $stmt->execute([$recipe_id]);
     $main = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -87,8 +95,13 @@ try {
     $result['tags'] = getRecipeTags($pdo, $recipe_id);
 
     // --- 4.5 核心修正：取得改編版本及其完整詳細資料 ---
-    $sqlAdaptations = "SELECT * FROM recipes 
-                        WHERE parent_recipe_id = ? AND recipe_id != ?";
+    $sqlAdaptations = "SELECT 
+                        r.*, 
+                        u.user_name as author_name,
+                        u.user_url as author_image
+                    FROM recipes r
+                    LEFT JOIN users u ON r.author_id = u.user_id 
+                    WHERE r.parent_recipe_id = ? AND r.recipe_id != ?";
     $stmtAdapt = $pdo->prepare($sqlAdaptations);
     $stmtAdapt->execute([$recipe_id, $recipe_id]);
     $adaptations = $stmtAdapt->fetchAll(PDO::FETCH_ASSOC);
