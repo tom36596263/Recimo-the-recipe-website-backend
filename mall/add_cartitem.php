@@ -41,7 +41,7 @@ if (!$user_id || !$product_id) {
 }
 
 try {
-    // 3. 如果存在就更新 quantity，不存在就插入
+    // 如果存在就更新 quantity，不存在就插入
     // 需要資料表對 user_id + product_id 有 UNIQUE 限制
     $sql = "INSERT INTO carts (user_id, product_id, quantity) 
             VALUES (:uid, :pid, :cnt) 
