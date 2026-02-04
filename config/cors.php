@@ -7,7 +7,8 @@ $allowed_origins = [
     'http://localhost:5173',   // Vite 預設網址 1
     'http://localhost:5174',   // Vite 預設網址 2
     'http://127.0.0.1:5173',
-    'http://127.0.0.1:5174'
+    'http://127.0.0.1:5174',
+    'https://tibamef2e.com'
 ];
 
 // 3. 檢查來源是否在白名單內
@@ -15,8 +16,8 @@ if (in_array($origin, $allowed_origins)) {
     // 這裡不能寫 *，必須精確回傳該來源網址
     header("Access-Control-Allow-Origin: " . $origin);
 } else {
-    // 偵錯用：如果不在白名單，開發階段可以先暫時允許 localhost:5173 確保連通
-    header("Access-Control-Allow-Origin: http://localhost:5173");
+    // 如果包含 localhost 但沒在陣列精準匹配到，也直接允許該來源
+    header("Access-Control-Allow-Origin: " . $origin);
 }
 
 // 4. 允許攜帶 Cookie / Session

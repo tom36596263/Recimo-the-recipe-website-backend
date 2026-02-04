@@ -28,9 +28,8 @@ $input = json_decode(file_get_contents('php://input'), true);
 $product_id = $input['product_id'] ?? null;
 $quantity = $input['quantity'] ?? 1;
 
-// 獲取 User ID (從 Session 拿，比較安全)
-
-$user_id = $_SESSION['user_id'] ?? null;
+// 優先抓取前端傳過來的 user_id，沒有的話再看 Session
+$user_id = $input['user_id'] ?? ($_SESSION['user_id'] ?? null);
 
 if (!$user_id || !$product_id) {
     echo json_encode([

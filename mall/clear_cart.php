@@ -16,6 +16,11 @@ require_once '../config/db_config.php';
 // ---------------------------------------------------------
 header("Content-Type: application/json; charset=UTF-8");
 
+// 取得前端傳來的 JSON 資料
+$input = json_decode(file_get_contents('php://input'), true);
+
+// 前端傳參優先
+$user_id = $input['user_id'] ?? ($_SESSION['user_id'] ?? null);
 
 if (!$user_id) {
     echo json_encode(["status" => "error", "message" => "請先登入"]);
