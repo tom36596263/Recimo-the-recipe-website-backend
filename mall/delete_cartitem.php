@@ -20,6 +20,8 @@ header("Content-Type: application/json; charset=UTF-8");
 // 第四步：撰寫 SQL 語句
 // ---------------------------------------------------------
 $input = json_decode(file_get_contents('php://input'), true);
+// 優先從前端傳來的 JSON 抓 user_id，沒傳才看 Session
+$user_id = $input['user_id'] ?? ($_SESSION['user_id'] ?? null);
 $product_id = $input['product_id'] ?? null;
 
 if (!$user_id || !$product_id) {

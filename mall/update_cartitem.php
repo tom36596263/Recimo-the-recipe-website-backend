@@ -21,6 +21,8 @@ header("Content-Type: application/json; charset=UTF-8");
 // ---------------------------------------------------------
 // 取得前端傳來的商品 ID 與「最終數量」
 $input = json_decode(file_get_contents('php://input'), true);
+// 前端傳來的 user_id 優先
+$user_id = $input['user_id'] ?? ($_SESSION['user_id'] ?? null);
 $product_id = $input['product_id'] ?? null;
 $quantity = $input['quantity'] ?? $input['count'] ?? 1; // 兩個都抓，萬無一失
 

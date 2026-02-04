@@ -128,8 +128,9 @@ try {
 
                     'product_reminder'       => $row['PRODUCT_REMINDER'] ?? '',
 
-                    'product_release'        => (int)($row['PRODUCT_RELEASE'] ?? 1)
-
+                    'product_release'        => (int)($row['PRODUCT_RELEASE'] ?? 1),
+                   'product_is_hot' => (int)($row['PRODUCT_IS_HOT'] ?? 0)
+                    
                 ]
 
             ];
@@ -165,15 +166,35 @@ else if ($method === 'POST' && $action === 'update') {
     $isFullUpdate = isset($productName);
 
     if (!$isFullUpdate) {
-        // --- 模式 1：快速上下架 (僅更新狀態) ---
-        $sql = "UPDATE products SET PRODUCT_RELEASE = :release WHERE PRODUCT_ID = :id";
+        // 準備一個陣列來存儲要更新的欄位
+    $updateFields = [];
+    $params = [':id' => $productId];
+
+    // 檢查是否有傳送「上下架」狀態
+    if (isset($data['product_release']) || isset($_POST['product_release'])) {
+        $updateFields[] = "PRODUCT_RELEASE = :release";
+        $params[':release'] = $data['product_release'] ?? $_POST['product_release'];
+    }
+
+    // 檢查是否有傳送「熱銷」狀態
+   if (isset($data['product_is_hot']) || isset($_POST['product_is_hot'])) {
+    $updateFields[] = "PRODUCT_IS_HOT = :is_hot";
+    // 💡 修正：強制轉為 0 或 1，避免布林值導致 SQL 失敗
+    $val = $data['product_is_hot'] ?? $_POST['product_is_hot'];
+    $params[':is_hot'] = $val ? 1 : 0; 
+}
+
+    // 如果有任何欄位需要更新
+    if (!empty($updateFields)) {
+        $sql = "UPDATE products SET " . implode(', ', $updateFields) . " WHERE PRODUCT_ID = :id";
         $stmt = $pdo->prepare($sql);
-        $stmt->execute([
-            ':release' => $productRelease ?? 1,
-            ':id'      => $productId
-        ]);
-        echo json_encode(['status' => 'success', 'message' => '上下架成功']);
-        exit; 
+        $stmt->execute($params);
+        
+        echo json_encode(['status' => 'success', 'message' => '狀態更新成功']);
+    } else {
+        echo json_encode(['status' => 'error', 'message' => '未提供更新資訊']);
+    }
+    exit;
     } else {
         // --- 模式 2：完整更新商品資料 (包含圖片刪除與所有欄位) ---
         $uploadDir = __DIR__ . '/../img/mall/';
@@ -232,7 +253,8 @@ else if ($method === 'POST' && $action === 'update') {
         // 5. 【恢復所有原本欄位】執行完整資料庫更新
         $sql = "UPDATE products SET 
                 PRODUCT_NAME = :name, PRODUCT_CATEGORY = :cat, PRODUCT_PRICE = :price, 
-                PRODUCT_DESCRIPTION = :descr, PRODUCT_RELEASE = :release, PRODUCT_KCAL = :kcal,
+                PRODUCT_DESCRIPTION = :descr, PRODUCT_RELEASE = :release, 
+                PRODUCT_IS_HOT = :is_hot,PRODUCT_KCAL = :kcal,
                 PRODUCT_CARBS = :carbs, PRODUCT_FAT = :fat, PRODUCT_FIBER = :fiber,
                 PRODUCT_PROTEIN = :protein, PRODUCT_SATURATED_FAT = :st_fat, PRODUCT_SUGAR = :sugar,
                 PRODUCT_SODIUM = :sodium, PRODUCT_INGREDIENTS = :ingredients,
@@ -248,6 +270,7 @@ else if ($method === 'POST' && $action === 'update') {
             ':price'       => $_POST['product_price'] ?? 0,
             ':descr'       => $_POST['product_description'] ?? '',
             ':release'     => $_POST['product_release'] ?? 1,
+            ':is_hot'       => $_POST['product_is_hot'] ?? 0,
             ':kcal'        => $_POST['product_kcal'] ?? 0,
             ':carbs'       => $_POST['product_carbs'] ?? 0,
             ':fat'         => $_POST['product_fat'] ?? 0,
@@ -268,50 +291,7 @@ else if ($method === 'POST' && $action === 'update') {
         echo json_encode(['status' => 'success', 'message' => '商品資料與圖片同步更新成功']);
         exit;
     }
-}// --- 功能 C：刪除商品資料 (POST 或 DELETE) ---
-
-    // else if ($method === 'POST' && $action === 'delete') {
-
-    //     $data = json_decode(file_get_contents("php://input"), true);
-
-       
-
-    //     if (!isset($data['product_id'])) {
-
-    //         echo json_encode(['status' => 'error', 'message' => '缺少商品ID']);
-
-    //         exit;
-
-    //     }
-
-
-
-    //     $sql = "DELETE FROM products WHERE PRODUCT_ID = :id";
-
-    //     $stmt = $pdo->prepare($sql);
-
-    //     $stmt->execute([':id' => $data['product_id']]);
-
-
-
-    //     // 檢查是否有實際刪除到資料
-
-    //     if ($stmt->rowCount() > 0) {
-
-    //         echo json_encode(['status' => 'success', 'message' => '商品已刪除']);
-
-    //     } else {
-
-    //         echo json_encode(['status' => 'error', 'message' => '找不到該商品或已被刪除']);
-
-    //     }
-
-    //     exit;
-
-    // }
-
-
-
+}
 } catch (PDOException $e) {
 
     http_response_code(500);
