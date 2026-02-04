@@ -1,5 +1,5 @@
 <?php
-// 檔案路徑: C:\MAMP\htdocs\recimo_api\recipes\gallery.php
+// 檔案路徑: C:\MAMP\htdocs\recimo_api\social\gallery.php
 
 require_once '../config/cors.php';
 require_once '../config/db_config.php';
@@ -34,7 +34,7 @@ if ($method === 'GET') {
 }
 
 // --- [POST] 上傳新的成品照 ---
-else if ($method === 'POST') {
+else if ($method === 'POST' && !isset($_GET['action'])) {
     $recipe_id = $_POST['recipe_id'] ?? null;
     $user_id   = $_POST['user_id']   ?? null;
     $gallery_text = $_POST['gallery_text'] ?? '';
@@ -45,8 +45,10 @@ else if ($method === 'POST') {
     }
 
     try {
-        $upload_dir = "../img/social/32/gallery/{$recipe_id}/";
+        // 🛠️ 修正點：移除寫死的 '32'，改為直接存放在 social/gallery/ 下
+        $upload_dir = "../img/social/gallery/{$recipe_id}/";
         if (!is_dir($upload_dir)) {
+            // 建立目錄並賦予權限，true 代表允許建立多層級目錄
             mkdir($upload_dir, 0777, true);
         }
 
@@ -54,7 +56,8 @@ else if ($method === 'POST') {
         $file_name = time() . "_" . uniqid() . "." . $file_ext;
         $target_path = $upload_dir . $file_name;
         
-        $db_url = "img/social/32/gallery/{$recipe_id}/" . $file_name;
+        // 🛠️ 修正點：資料庫儲存路徑同步移除 '32'
+        $db_url = "img/social/gallery/{$recipe_id}/" . $file_name;
 
         if (move_uploaded_file($_FILES['image']['tmp_name'], $target_path)) {
             $sql = "INSERT INTO recipe_gallery (recipe_id, user_id, gallery_text, upload_at, gallery_url) 
@@ -76,7 +79,7 @@ else if ($method === 'POST') {
                 ]);
             }
         } else {
-            throw new Exception("圖片移動失敗");
+            throw new Exception("圖片移動失敗，請檢查資料夾寫入權限");
         }
     } catch (Exception $e) {
         echo json_encode(['success' => false, 'message' => '上傳失敗：' . $e->getMessage()]);
@@ -85,7 +88,6 @@ else if ($method === 'POST') {
 
 // --- 🏆 [DELETE] 刪除本人作品照 ---
 else if ($method === 'DELETE' || ($method === 'POST' && isset($_GET['action']) && $_GET['action'] === 'delete')) {
-    // 取得 JSON 資料
     $json = file_get_contents("php://input");
     $data = json_decode($json, true);
 
@@ -108,8 +110,9 @@ else if ($method === 'DELETE' || ($method === 'POST' && isset($_GET['action']) &
             exit;
         }
 
-        // 2. 刪除硬碟實體檔案 ( unlink )
-        $file_path = "../" . $row['gallery_url']; // 加上目錄前綴
+        // 2. 刪除硬碟實體檔案
+        // 這裡會自動對應到你資料庫存的新路徑 (不含 32 的路徑)
+        $file_path = "../" . $row['gallery_url']; 
         if (file_exists($file_path)) {
             unlink($file_path);
         }
