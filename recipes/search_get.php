@@ -20,13 +20,17 @@ try {
     LEFT JOIN tags t ON rtr.tag_id = t.tag_id
     WHERE (r.status = 0 AND r.parent_recipe_id IS NULL)
     ";
-
-    // 關鍵字篩選
+    // 2. 動態拼接 WHERE 條件 (注意開頭的空格)
     if ($keyword !== '') {
-        $sql .= " AND (r.recipe_title LIKE :kw OR r.recipe_description LIKE :kw)";
+        $sql .= " AND (r.recipe_title LIKE :kw OR r.recipe_description LIKE :kw OR t.tag_name LIKE :kw) ";
     }
 
-    $sql .= " GROUP BY r.recipe_id ORDER BY r.recipe_id";
+    // 3. 拼接 GROUP BY (必須在 WHERE 之後)
+    $sql .= " GROUP BY r.recipe_id, r.recipe_title, r.recipe_image_url, r.recipe_description, r.linked_product_id ";
+
+    // 4. 拼接 ORDER BY
+    $sql .= " ORDER BY r.recipe_id DESC ";
+
 
     $stmt = $pdo->prepare($sql);
     if ($keyword !== '') { $stmt->bindParam(':kw', $kwParam); }
@@ -35,6 +39,7 @@ try {
 
     foreach ($results as &$row) {
         $row['tags'] = $row['tag_names'] ? explode(',', $row['tag_names']) : [];
+        $row['source_type'] = 'recipe';
         unset($row['tag_names']);
     }
 
