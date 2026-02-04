@@ -1,19 +1,21 @@
 <?php
 /**
  * 檔案路徑: C:\MAMP\htdocs\recimo_api\recipes\nutritionhelper.php
- * 功能：計算食譜「單份」的營養成分
+ * 功能：計算整份食譜的「總營養成分」
  */
 
 class nutritionhelper {
     /**
-     * @param array $rawRecipe 包含 recipe_servings 的原始資料
+     * @param array $rawRecipe 包含食譜資訊
+     * @param array $ingredients 該食譜的食材清單
+     * @param PDO $pdo 資料庫連線
      */
     public static function calculate($rawRecipe, $ingredients, $pdo) {
         $totalKcal = 0; $totalP = 0; $totalF = 0; $totalC = 0;
 
         if (empty($ingredients)) return self::emptyResult();
 
-        // 1. 先計算所有食材加總的總量
+        // 1. 計算所有食材加總的總量
         foreach ($ingredients as $ing) {
             $ingId = $ing['ingredient_id'] ?? null;
             if (!$ingId) continue;
@@ -25,7 +27,7 @@ class nutritionhelper {
             if ($base) {
                 $amt = (float)($ing['amount'] ?? 0);
                 
-                // 防錯：處理單位轉換
+                // 處理單位轉換
                 $unit = mb_strtolower(trim($ing['unit_name'] ?? ''));
                 $conv = ($unit === '克' || $unit === 'g') ? 1.0 : (float)($base['gram_conversion'] ?? 1);
 
@@ -39,17 +41,13 @@ class nutritionhelper {
             }
         }
 
-        // 2. 🏆 取得預設份數並計算「單份」數值
-        // 參考 JSON 中的 recipe_servings 欄位
-        $servings = (float)($rawRecipe['recipe_servings'] ?? 1);
-        if ($servings <= 0) $servings = 1; // 避免除以零
-
-        // 3. 回傳單份營養價值
+        // 2. 🏆 修改重點：直接回傳總量 (不再除以 $servings)
+        // 雖然 Key 名稱暫時維持 recipe_kcal_per_100g 以相容資料庫，但數值已是整份總和
         return [
-            'recipe_kcal_per_100g'    => round($totalKcal / $servings, 2), 
-            'recipe_protein_per_100g' => round($totalP / $servings, 2),    // 這裡會存入 59.98
-            'recipe_fat_per_100g'     => round($totalF / $servings, 2),    // 這裡會存入 28.53
-            'recipe_carbs_per_100g'   => round($totalC / $servings, 2)     // 這裡會存入 127.14
+            'recipe_kcal_per_100g'    => round($totalKcal, 2), 
+            'recipe_protein_per_100g' => round($totalP, 2),
+            'recipe_fat_per_100g'     => round($totalF, 2),
+            'recipe_carbs_per_100g'   => round($totalC, 2)
         ];
     }
 
