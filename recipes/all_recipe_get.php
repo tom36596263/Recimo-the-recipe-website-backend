@@ -16,7 +16,7 @@ if ($mode === 'public') {
 }
 
 // 💡 關鍵：因為第一個檔案用了聚合函數 (GROUP_CONCAT)，這裡必須補上 GROUP BY
-$sql .= " GROUP BY r.recipe_id ORDER BY r.recipe_id DESC";
+$sql .= " GROUP BY r.recipe_id ORDER BY r.recipe_id";
 
 try {
     $stmt = $pdo->prepare($sql);

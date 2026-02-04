@@ -16,10 +16,13 @@ header("Content-Type: application/json; charset=UTF-8");
 
 // 用 Session 存 user_id
 session_start();
-$user_id = $_SESSION['user_id'] ?? null;
+// 優先從 GET 參數拿，拿不到才看 Session
+$user_id = $_GET['user_id'] ?? ($_SESSION['user_id'] ?? null);
 
 if (!$user_id) {
-    echo json_encode(["status" => "error", "message" => "請先登入"]);
+    // 如果沒登入，回傳 status: success 但 data: [] 
+    // 這樣前端才不會噴 error，而是顯示「購物車目前沒有商品」
+    echo json_encode(["status" => "success", "data" => []]);
     exit;
 }
 
