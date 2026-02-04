@@ -2,6 +2,9 @@
 $baseSelect = "SELECT 
     r.*, 
     p.product_name,
+    p.product_category,
+    p.product_image,
+    p.product_id AS linked_product_id,
     GROUP_CONCAT(DISTINCT t.tag_name) AS tag_names,
     GROUP_CONCAT(DISTINCT ri.ingredient_id) AS ingredient_ids
 FROM recipes r
