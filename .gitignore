@@ -12,3 +12,6 @@ Thumbs.db
 .github
 
 config/db_config.php
+
+# 忽略google登入程式碼
+/vendor/

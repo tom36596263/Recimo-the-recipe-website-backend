@@ -14,7 +14,7 @@ try {
         $sql = "SELECT * FROM ingredients 
                 WHERE ingredient_name LIKE :keyword 
                 OR ingredient_id = :exact_id
-                ORDER BY ingredient_id DESC"; // 新的排前面
+                ORDER BY ingredient_id ASC"; 
         
         $stmt = $pdo->prepare($sql);
         $stmt->execute([
@@ -23,7 +23,7 @@ try {
         ]);
     } else {
         // --- 一般模式 (抓全部) ---
-        $sql = "SELECT * FROM ingredients ORDER BY ingredient_id DESC";
+        $sql = "SELECT * FROM ingredients ORDER BY ingredient_id ASC";
         $stmt = $pdo->query($sql);
     }
 
