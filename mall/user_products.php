@@ -113,8 +113,8 @@ try {
                 'product_cooking_method' => $row['PRODUCT_COOKING_METHOD'] ?? '',
                 'product_storage_method' => $row['PRODUCT_STORAGE_METHOD'] ?? '',
                 'product_reminder'       => $row['PRODUCT_REMINDER'] ?? '',
-                
-                'product_release'        => (int)($row['PRODUCT_RELEASE'] ?? 0) === 1
+                'product_release'        => (int)($row['PRODUCT_RELEASE'] ?? 0) === 1,
+                'product_is_hot'        => (int)($row['PRODUCT_IS_HOT'] ?? 0) === 1
             ]
         ];
     }

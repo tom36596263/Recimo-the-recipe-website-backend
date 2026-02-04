@@ -1,8 +1,17 @@
 <?php
+// 1. 強制顯示所有錯誤，方便調試
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
+
 require_once '../config/cors.php';
 require_once '../config/db_config.php';
 
 header("Content-Type: application/json; charset=UTF-8");
+
+if (!isset($pdo)) {
+    echo json_encode(['status' => 'error', 'message' => 'PDO連線遺失']);
+    exit;
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $input = json_decode(file_get_contents('php://input'), true);
@@ -10,68 +19,91 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $reporter_id = $input['reporter_id'] ?? null;
     $target_type = $input['target_type'] ?? null; 
     $target_id   = $input['target_id']   ?? null;
-    $reason      = trim($input['reason'] ?? ''); 
-    $note        = trim($input['note']   ?? '');
-
-    if (!$reporter_id || !$target_type || !$target_id || !$reason) {
-        echo json_encode(['status' => 'error', 'message' => '欄位不足']);
-        exit;
-    }
+    
+    // 取得標籤文字並去除可能的前後空白
+    $reason_raw  = isset($input['reason']) ? trim($input['reason']) : ''; 
+    $note        = trim($input['note']   ?? ''); 
 
     try {
         $table = "";
         $id_column = "";
         $type_map = [];
 
-        if ($target_type === 'comment') {
-            $table = "reported_comments";
-            $id_column = "comment_id";
-            $type_map = [
-                '仇恨或攻擊言論' => 1,
-                '色情或不當內容' => 2,
-                '垃圾訊息 / 廣告' => 3,
-                '不實資訊' => 4,
-                '其他原因' => 5
-            ];
-        } elseif ($target_type === 'recipe') {
-            $table = "reported_recipes";
-            $id_column = "recipe_id";
-            $type_map = [
-                '內容侵權 (盜圖或盜文)' => 1,
-                '垃圾訊息 / 廣告' => 2,
-                '不實資訊 / 錯誤的食譜步驟' => 3,
-                '仇恨或不當言論' => 4,
-                '其他原因' => 5
-            ];
-        } else {
-            throw new Exception('不支援的檢舉類型');
+        // 🏆 根據 target_type 決定資料表，並對應前端 Vue 的 reasons 文字
+        switch ($target_type) {
+            case 'gallery':
+                $table = "reported_galleries";
+                $id_column = "gallery_id";
+                $type_map = [
+                    '垃圾訊息 / 廣告' => 1, 
+                    '色情或不當內容' => 2, 
+                    '內容侵權 (盜圖或盜文)' => 3, 
+                    '仇恨或攻擊言論' => 4, 
+                    '其他原因' => 5
+                ];
+                break;
+
+            case 'recipe':
+                $table = "reported_recipes";
+                $id_column = "recipe_id";
+                $type_map = [
+                    '內容侵權 (盜圖或盜文)' => 2, 
+                    '垃圾訊息 / 廣告' => 1, 
+                    '不實資訊 / 錯誤的食譜步驟' => 4,
+                    '仇恨或不當言論' => 3, 
+                    '其他原因' => 5
+                ];
+                break;
+
+            case 'comment':
+                $table = "reported_comments";
+                $id_column = "comment_id";
+                $type_map = [
+                    '垃圾訊息 / 廣告' => 1, 
+                    '仇恨或攻擊言論' => 2, 
+                    '色情或不當內容' => 3, 
+                    '不實資訊' => 4, 
+                    '其他原因' => 5
+                ];
+                break;
+
+            default:
+                throw new Exception('不支援的類型: ' . $target_type);
         }
 
-        // 🏆 根據文字映射出 ID
-        $report_type = isset($type_map[$reason]) ? $type_map[$reason] : 5;
+        // 🏆 判定類型 ID (如果文字對不上，就會變成 5)
+        $report_type_int = $type_map[$reason_raw] ?? 5;
 
-        $sql = "INSERT INTO $table ($id_column, reporter_id, report_type, report_reason, status, reported_at) 
-                VALUES (?, ?, ?, ?, 0, NOW())";
+        // 🏆 處理文字內容：優先存 note (補充說明)，沒填則存標籤文字
+        $final_reason = !empty($note) ? $note : $reason_raw;
+
+        // 🏆 執行 SQL 插入
+        $sql = "INSERT INTO $table ($id_column, reporter_id, report_type, report_reason, status, handler_id, reported_at, update_at) 
+                VALUES (:target_id, :reporter_id, :report_type, :reason, 0, NULL, NOW(), NULL)";
         
         $stmt = $pdo->prepare($sql);
-        
-        // 🏆 核心修正：
-        // 1. report_type 存入映射後的數字 ID
-        // 2. report_reason 只存入 $note (純補充內容)，如果沒填就存空字串
         $result = $stmt->execute([
-            $target_id, 
-            $reporter_id, 
-            $report_type,
-            $note 
+            ':target_id'   => $target_id,
+            ':reporter_id' => $reporter_id,
+            ':report_type' => $report_type_int,
+            ':reason'      => $final_reason
         ]);
 
         if ($result) {
             echo json_encode(['status' => 'success', 'message' => '檢舉成功']);
-        } else {
-            throw new Exception('資料庫寫入失敗');
         }
+
+    } catch (PDOException $e) {
+        echo json_encode([
+            'status' => 'error', 
+            'message' => '資料庫錯誤，請聯繫管理員',
+            'sql_error' => $e->getMessage()
+        ]);
     } catch (Exception $e) {
-        http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        echo json_encode([
+            'status' => 'error', 
+            'message' => $e->getMessage()
+        ]);
     }
 }
+?>
