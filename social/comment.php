@@ -16,9 +16,21 @@ try {
                 echo json_encode(['success' => false, 'message' => '缺少食譜 ID']);
                 exit;
             }
-            $sql = 'SELECT * FROM recipe_comments WHERE recipe_id = ? ORDER BY comment_at DESC';
+
+            // 🏆 關鍵修正：使用 LEFT JOIN 抓取 users 表的 user_name
+            $sql = 'SELECT 
+                rc.*, 
+                u.user_name AS userName,  -- 🏆 這裡強制轉成跟 Vue 一樣的大寫 userName
+                u.user_url as user_avatar 
+                FROM recipe_comments rc
+                LEFT JOIN users u ON rc.user_id = u.user_id 
+                WHERE rc.recipe_id = ? 
+                ORDER BY rc.comment_at DESC';
+            
             $stmt = $pdo->prepare($sql);
             $stmt->execute([$recipe_id]);
+            
+            // 抓取所有留言
             echo json_encode($stmt->fetchAll(PDO::FETCH_ASSOC), JSON_UNESCAPED_UNICODE);
             break;
 
@@ -48,7 +60,6 @@ try {
 
                 if (!$recipe_id || !$user_id || !$content) throw new Exception('欄位不得為空');
 
-                // 補上 like_count = 0 確保嚴格模式下也能成功插入
                 $sql = 'INSERT INTO recipe_comments (recipe_id, user_id, comment_text, comment_at, is_display, like_count) 
                         VALUES (?, ?, ?, NOW(), 1, 0)';
                 $stmt = $pdo->prepare($sql);
@@ -81,6 +92,5 @@ try {
     }
 } catch (Exception $e) {
     http_response_code(500);
-    // 輸出具體錯誤訊息，方便你除錯
     echo json_encode(['success' => false, 'message' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
 }

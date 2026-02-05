@@ -109,13 +109,18 @@ $sqlMain = "SELECT
     foreach ($adaptations as &$child) {
         $child_id = $child['recipe_id'];
 
-        // A. 抓取該改編版本的食材
-        $sqlChildIng = "SELECT ri.*, i.ingredient_name, i.kcal_per_100g, i.protein_per_100g, 
-                                i.fat_per_100g, i.carbs_per_100g, i.gram_conversion,
-                                ri.remark
-                        FROM recipe_ingredients ri
-                        JOIN ingredients i ON ri.ingredient_id = i.ingredient_id
-                        WHERE ri.recipe_id = ?";
+        $sqlChildIng = "SELECT ri.*, 
+                        i.ingredient_name as name, 
+                        i.ingredient_name, 
+                        i.kcal_per_100g, 
+                        i.protein_per_100g, 
+                        i.fat_per_100g, 
+                        i.carbs_per_100g, 
+                        i.gram_conversion,
+                        ri.remark
+                FROM recipe_ingredients ri
+                JOIN ingredients i ON ri.ingredient_id = i.ingredient_id
+                WHERE ri.recipe_id = ?";
         $stmtChildIng = $pdo->prepare($sqlChildIng);
         $stmtChildIng->execute([$child_id]);
         $child['ingredients'] = $stmtChildIng->fetchAll(PDO::FETCH_ASSOC);
