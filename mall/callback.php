@@ -28,9 +28,21 @@ try {
             // 寫個 Log 方便除錯
             file_put_contents('ecpay_db_log.txt', "訂單 {$order_id} 付款成功並更新成功\n", FILE_APPEND);
         }
+       if ($rtnCode == '1') {
+    // 1. 先查詢該訂單目前的狀態
+    $checkStmt = $pdo->prepare("SELECT payment_status FROM orders WHERE order_id = ?");
+    $checkStmt->execute([$order_id]);
+    $currentStatus = $checkStmt->fetchColumn();
+
+    // 2. 只有在狀態還沒變成「已付款」時才更新，避免重複觸發邏輯（如發送 Email）
+    if ($currentStatus == 0) { 
+        $stmt = $pdo->prepare("UPDATE orders SET payment_status = 1, order_status = 1, pay_time = NOW() WHERE order_id = ?");
+        $stmt->execute([$order_id]);
+    }
+
+    echo '1|OK'; // 務必確保輸出只有這四個字，不要有額外的 HTML 標籤
+}
         
-        // 3. 必須回傳這個，綠界才會停止發送通知
-        echo '1|OK';
     }
 } catch (Exception $e) {
     file_put_contents('ecpay_error_log.txt', $e->getMessage() . "\n", FILE_APPEND);
