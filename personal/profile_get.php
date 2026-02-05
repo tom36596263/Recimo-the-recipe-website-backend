@@ -90,7 +90,7 @@ try {
         'user_email' => $user['user_email'],
         'user_phone' => $user['user_phone'],
         'user_address' => $user['user_address'],
-        'user_url' => $user['user_url'] ?: 'img/profile/1.png',
+        'user_url' => $user['user_url'] ?: 'img/site/None_avatar.svg',
         'user_bio' => isset($user['user_bio']) ? $user['user_bio'] : '無內容',
         'user_cover_image' => isset($user['user_cover_image']) ? $user['user_cover_image'] : 'img/profile/2.png',
         'user_startdate' => $user['user_startdate'],
