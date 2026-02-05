@@ -23,11 +23,11 @@ if (!$code) {
     exit;
 }
 
-// === 設定您的 LINE Channel 資訊 ===
-$channelId = '2009040716';
-$channelSecret = '2b5f90987a7b8e94a0ef5f341f281bfd';
+//  LINE Channel 資訊
+$channelId = LINE_CHANNEL_ID;
+$channelSecret = LINE_CHANNEL_SECRET;
 
-// 💡 【關鍵修改】：動態取得 Redirect URI
+// 動態取得 Redirect URI
 // 根據前端發送 API 請求的來源 (HTTP_ORIGIN) 自動組合 callback 網址
 // 例如從 http://localhost:5174 發來，這就會變成 http://localhost:5174/auth/callback
 $origin = $_SERVER['HTTP_ORIGIN'] ?? 'http://localhost:5173';
@@ -64,7 +64,7 @@ if (!isset($tokenData['access_token'])) {
     echo json_encode([
         'status'  => 'error', 
         'message' => 'LINE 換取 Token 失敗', 
-        'detail'  => $tokenData, // 幫助老師您除錯，看看是哪種網址出問題
+        'detail'  => $tokenData, // 除錯
         'sent_redirect_uri' => $redirectUri // 顯示後端當下使用的 URI
     ]);
     exit;
@@ -95,7 +95,7 @@ if (!$lineUserId) {
 
 // --- 步驟 C：資料庫邏輯 ---
 try {
-    // 1. 檢查資料庫是否有此 LINE ID
+    // 檢查資料庫是否有此 LINE ID
     $stmt = $pdo->prepare("SELECT * FROM users WHERE line_id = ?");
     $stmt->execute([$lineUserId]);
     $user = $stmt->fetch();
