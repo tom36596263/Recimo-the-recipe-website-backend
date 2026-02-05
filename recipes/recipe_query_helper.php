@@ -34,8 +34,22 @@ function buildRecipeWhereClause($mode = 'public') {
     ];
     if (isset($diffMap[$diffFilt])) $whereConditions[] = $diffMap[$diffFilt];
 
-    // C. 份數與 D. 熱量 (以此類推...)
-    // ... 這裡放入你原本的 $portionFilt 和 $kcalFilt 邏輯 ...
+    // --- C. 用餐份數過濾 (已修正變數名稱) ---
+    $portionFilt = $_GET['mealPortions'] ?? '全部';
+    if ($portionFilt !== '全部') {
+        if ($portionFilt === '1人獨享')      $whereConditions[] = "r.recipe_servings = 1";
+        else if ($portionFilt === '2人世界') $whereConditions[] = "r.recipe_servings = 2";
+        else if ($portionFilt === '3-4人家庭') $whereConditions[] = "r.recipe_servings >= 3 AND r.recipe_servings <= 4";
+        else if ($portionFilt === '6人以上聚會') $whereConditions[] = "r.recipe_servings >= 6";
+    }
+
+    // --- D. 熱量過濾 (已修正變數名稱) ---
+    $kcalFilt = $_GET['kcal'] ?? '全部';
+    if ($kcalFilt !== '全部') {
+        if ($kcalFilt === '100kcal(輕食)')      $whereConditions[] = "r.recipe_kcal_per_100g < 100";
+        else if ($kcalFilt === '150-300kcal(均衡)') $whereConditions[] = "r.recipe_kcal_per_100g > 150 AND r.recipe_kcal_per_100g <= 300";
+        else if ($kcalFilt === '300kcal以上(豐盛)') $whereConditions[] = "r.recipe_kcal_per_100g > 300";
+    }
 
     // E. 食材過濾
     $ingredients = $_GET['ingredients'] ?? '';
