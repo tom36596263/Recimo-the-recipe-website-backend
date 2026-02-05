@@ -138,8 +138,8 @@ try {
 
                         // 處理步驟食材關聯 (tags)
         if (!empty($step['tags']) && is_array($step['tags'])) {
-
-            foreach ($step['tags'] as $ingId) {
+            $uniqueTags = array_unique($step['tags']);
+            foreach ($uniqueTags as $ingId) {
                 if (is_numeric($ingId)) {
                         $stmtStepIng->execute([
                         $current_step_id,
