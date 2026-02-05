@@ -1518,7 +1518,7 @@ class ECPay_CheckMacValue{
             
             // URL Encode編碼     
             $sMacValue = urlencode($sMacValue); 
-            
+
             // 轉成小寫
             $sMacValue = strtolower($sMacValue);        
             

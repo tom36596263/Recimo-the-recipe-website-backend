@@ -46,9 +46,9 @@ function buildRecipeWhereClause($mode = 'public') {
     // --- D. 熱量過濾 (已修正變數名稱) ---
     $kcalFilt = $_GET['kcal'] ?? '全部';
     if ($kcalFilt !== '全部') {
-        if ($kcalFilt === '100kcal(輕食)')      $whereConditions[] = "r.recipe_kcal_per_100g < 100";
-        else if ($kcalFilt === '150-300kcal(均衡)') $whereConditions[] = "r.recipe_kcal_per_100g > 150 AND r.recipe_kcal_per_100g <= 300";
-        else if ($kcalFilt === '300kcal以上(豐盛)') $whereConditions[] = "r.recipe_kcal_per_100g > 300";
+        if ($kcalFilt === '500kcal(輕食)')      $whereConditions[] = "r.recipe_kcal_per_100g < 500";
+        else if ($kcalFilt === '500-1000kcal(均衡)') $whereConditions[] = "r.recipe_kcal_per_100g > 500 AND r.recipe_kcal_per_100g <= 1000";
+        else if ($kcalFilt === '1000kcal以上(豐盛)') $whereConditions[] = "r.recipe_kcal_per_100g > 1000";
     }
 
     // E. 食材過濾
