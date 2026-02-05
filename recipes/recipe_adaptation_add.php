@@ -71,15 +71,18 @@ try {
         $input['parent_recipe_id'] ?? null,
         $input['author_id'],
         $input['recipe_title'],
+        // ✨ 長文本 (aaa) 存入 recipe_description
         $input['recipe_description'] ?? '', 
         '', // 圖片路徑先留空
         formatDbTime($input['total_time'] ?? $input['recipe_total_time'] ?? '00:30:00'),
         $input['recipe_difficulty'] ?? 1,
         $input['recipe_servings'] ?? 1,
         0, 
+        // ✨ 改編小標題 (來自前端的 adaptation_title)
         $input['adaptation_title'] ?? $input['recipe_title'], 
+        // ✨ 改編重點 (bbb) 存入 adaptation_note
         $input['adaptation_note'] ?? '',
-        // 🏆 使用 Helper 回傳的鍵名
+        // 🏆 營養數據
         $nutri['recipe_kcal_per_100g'], 
         $nutri['recipe_protein_per_100g'], 
         $nutri['recipe_fat_per_100g'], 

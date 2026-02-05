@@ -1,47 +1,30 @@
 <?php
 
 require_once '../config/cors.php';
-
 require_once '../config/db_config.php';
-
-
-
 header('Content-Type: application/json; charset=utf-8');
 
 
-
 // 強制讓 PDO 錯誤顯示，方便除錯
-
 $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-
-
-
 if (!isset($isLocal)) {
 
     $isLocal = (str_contains($_SERVER["HTTP_HOST"], "127.0.0.1") || str_contains($_SERVER["HTTP_HOST"], "localhost"));
-
 }
 
 
 
 $imgBaseUrl = $isLocal
-
     ? 'http://' . $_SERVER['HTTP_HOST'] . '/recimo_api/img/mall/'
-
-    : 'https://tibamef2e.com/cjd102/g2/recimo/uploads/mall/';
+    : 'https://tibamef2e.com/cjd102/g2/recimo/img/mall/';
 
 
 
 $method = $_SERVER['REQUEST_METHOD'];
-
 $action = $_GET['action'] ?? '';
-
-
-
 try {
 
-    // --- 功能 A：讀取商品資料 (GET) ---
-
+    //讀取商品資料 (GET)
     if ($method === 'GET' && $action === 'read') {
 
         $sql = "SELECT * FROM products ORDER BY PRODUCT_ID";
@@ -50,22 +33,12 @@ try {
 
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-       
-
         $response = [];
 
         foreach ($rows as $row) {
-
-            // 【關鍵修正】將所有欄位 Key 轉為大寫，避免 MAMP 環境大小寫不一致問題
-
             $row = array_change_key_case($row, CASE_UPPER);
-
-
-
             // 處理圖片路徑
-
             $imgData = json_decode($row['PRODUCT_IMAGE'] ?? '[]', true);
-
             $allImages = [];
 
             if (is_array($imgData)) {
@@ -83,7 +56,6 @@ try {
 
 
             // 組合回傳資料（對應 Vue 的欄位結構）
-
             $response[] = [
 
                 'id'                  => (int)($row['PRODUCT_ID'] ?? 0),
@@ -143,11 +115,7 @@ try {
 
     }
 
-
-
-    // --- 功能 B：更新商品資料 (POST) ---
-
-// --- 功能 B：更新商品資料 (POST) ---
+// 更新商品資料 (POST)
 else if ($method === 'POST' && $action === 'update') {
     $json = file_get_contents('php://input');
     $data = json_decode($json, true);
@@ -196,10 +164,10 @@ else if ($method === 'POST' && $action === 'update') {
     }
     exit;
     } else {
-        // --- 模式 2：完整更新商品資料 (包含圖片刪除與所有欄位) ---
+        //完整更新商品資料 (包含圖片刪除與所有欄位) 
         $uploadDir = __DIR__ . '/../img/mall/';
 
-        // 1. 先從資料庫查出「原本的圖片」做為刪除對照
+        // 先從資料庫查出「原本的圖片」做為刪除對照
         $stmtSelect = $pdo->prepare("SELECT PRODUCT_IMAGE FROM products WHERE PRODUCT_ID = :id");
         $stmtSelect->execute([':id' => $productId]);
         $oldRow = $stmtSelect->fetch(PDO::FETCH_ASSOC);
@@ -209,7 +177,7 @@ else if ($method === 'POST' && $action === 'update') {
         $finalImages = [];
         $keptFiles = []; 
 
-        // 2. 處理前端傳過來「要保留」的舊圖片
+        // 處理前端傳過來「要保留」的舊圖片
         if (isset($_POST['existing_images']) && is_array($_POST['existing_images'])) {
             foreach ($_POST['existing_images'] as $index => $url) {
                 $fileName = basename($url);
@@ -222,7 +190,7 @@ else if ($method === 'POST' && $action === 'update') {
             }
         }
 
-        // 3. 【真正刪除實體檔案】找出資料庫有，但前端沒傳過來的檔案
+        //找出資料庫有，但前端沒傳過來的檔案
         $filesToDelete = array_diff($oldFiles, $keptFiles);
         foreach ($filesToDelete as $file) {
             $target = $uploadDir . $file;
@@ -231,7 +199,7 @@ else if ($method === 'POST' && $action === 'update') {
             }
         }
 
-        // 4. 處理新上傳圖片 (使用 uniqid 解決你換回舊圖存不進去的問題)
+        // 處理新上傳圖片 (使用 uniqid 解決你換回舊圖存不進去的問題)
         if (isset($_FILES['product_images'])) {
             foreach ($_FILES['product_images']['tmp_name'] as $key => $tmpName) {
                 if ($_FILES['product_images']['error'][$key] === UPLOAD_ERR_OK) {
@@ -250,7 +218,7 @@ else if ($method === 'POST' && $action === 'update') {
 
         $jsonImages = json_encode($finalImages, JSON_UNESCAPED_UNICODE);
 
-        // 5. 【恢復所有原本欄位】執行完整資料庫更新
+        // 【恢復所有原本欄位】執行完整資料庫更新
         $sql = "UPDATE products SET 
                 PRODUCT_NAME = :name, PRODUCT_CATEGORY = :cat, PRODUCT_PRICE = :price, 
                 PRODUCT_DESCRIPTION = :descr, PRODUCT_RELEASE = :release, 

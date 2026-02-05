@@ -42,7 +42,7 @@ if (!isset($isLocal)) {
 // ---------------------------------------------------------
 $imgBaseUrl = $isLocal 
     ? 'http://' . $_SERVER['HTTP_HOST'] . '/recimo_api/img/mall/' 
-    : 'https://tibamef2e.com/cjd102/g2/recimo/uploads/mall/';
+    : 'https://tibamef2e.com/cjd102/g2/recimo/img/mall/';
 
 try {
     // ---------------------------------------------------------
