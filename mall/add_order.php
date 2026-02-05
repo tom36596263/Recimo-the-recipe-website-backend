@@ -116,7 +116,8 @@ $stmt->execute([
     echo json_encode([
         "success"  => true,
         "message"  => "Success",
-        "order_id" => $new_order_id
+        "order_id" => $new_order_id,
+        "payment_method" => $raw_payment_method
     ]);
 
 } catch (PDOException $e) {

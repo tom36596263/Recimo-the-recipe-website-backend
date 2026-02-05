@@ -1,43 +1,27 @@
 <?php
 
 require_once '../config/cors.php';
-
 require_once '../config/db_config.php';
-
-
-
 header('Content-Type: application/json; charset=utf-8');
 
 
-
 // 強制讓 PDO 錯誤顯示，方便除錯
-
 $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-
-
-
 if (!isset($isLocal)) {
 
     $isLocal = (str_contains($_SERVER["HTTP_HOST"], "127.0.0.1") || str_contains($_SERVER["HTTP_HOST"], "localhost"));
-
 }
 
 
 
 $imgBaseUrl = $isLocal
-
     ? 'http://' . $_SERVER['HTTP_HOST'] . '/recimo_api/img/mall/'
-
-    : 'https://tibamef2e.com/cjd102/g2/recimo/uploads/mall/';
+    : 'https://tibamef2e.com/cjd102/g2/recimo/img/mall/';
 
 
 
 $method = $_SERVER['REQUEST_METHOD'];
-
 $action = $_GET['action'] ?? '';
-
-
-
 try {
 
     //讀取商品資料 (GET)
