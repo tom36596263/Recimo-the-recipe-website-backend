@@ -49,21 +49,38 @@ function formatDbTime($timeInput) {
  */
 function saveBase64Image($base64Data, $recipeId, $fileName, $subDir = "") {
     if (empty($base64Data)) return null;
+
+    // 🏆 1. 編輯保護邏輯：如果資料已經是完整網址，代表「沒換新圖」，直接去頭回傳路徑
+    if (strpos($base64Data, 'http') === 0) {
+        $pos = strpos($base64Data, 'img/');
+        if ($pos !== false) {
+            return substr($base64Data, $pos);
+        }
+        return $base64Data;
+    }
+
     if (!preg_match('/^data:image\/(\w+);base64,/', $base64Data, $type)) {
         return $base64Data; 
     }
     
     $data = base64_decode(substr($base64Data, strpos($base64Data, ',') + 1));
     
-    // 組合目錄路徑
+    // 組合目錄路徑 (使用相對路徑往上一層找 img)
     $baseDir = "../img/recipes/" . $recipeId;
     $targetDir = $subDir ? $baseDir . "/" . $subDir : $baseDir;
     
     // 遞迴建立目錄
-    if (!is_dir($targetDir)) mkdir($targetDir, 0777, true);
+    if (!is_dir($targetDir)) {
+        mkdir($targetDir, 0777, true);
+        // 🏆 額外補強：確保新建目錄在伺服器環境權限正確
+        chmod($targetDir, 0777);
+    }
     
     $filePath = $targetDir . "/" . $fileName . ".png";
     file_put_contents($filePath, $data);
+    
+    // 🏆 額外補強：確保新檔案能被瀏覽器讀取
+    chmod($filePath, 0666);
     
     // 回傳資料庫儲存路徑
     return "img/recipes/" . $recipeId . "/" . ($subDir ? $subDir . "/" : "") . $fileName . ".png";
