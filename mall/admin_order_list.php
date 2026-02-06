@@ -50,6 +50,11 @@ try {
         exit;
     }
 
+    foreach ($order as &$o) {
+        if (isset($o['total_amount'])) {
+            $o['total_amount'] = (float)$o['total_amount']; 
+        }
+    }
   
     // 查詢「訂單產品明細」
     $sql_items = "SELECT * FROM order_products WHERE order_id = :oid";
