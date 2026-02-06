@@ -66,7 +66,7 @@ try {
         $finalCoverPath = saveBase64Image($finalCoverPath, $recipe_id, "cover");
     }
 
-    // C. 更新主食譜 (🏆 已補上 recipe_created_at = NOW() 以更新時間)
+    // C. 更新主食譜
     $sqlMain = "UPDATE recipes SET 
         recipe_title = ?, 
         recipe_description = ?, 
@@ -114,16 +114,32 @@ try {
                 $ing['amount'] ?? 0,
                 $ing['unit_name'] ?? '份',
                 $ing['remark'] ?? '',
-                (isset($ing['is_modified']) && $ing['is_modified'] === 1) ? 1 : 0
+                (isset($ing['is_modified']) && $ing['is_modified'] == 1) ? 1 : 0
             ]);
         }
     }
 
-    // E. 更新步驟 (先刪除後重新插入)
+    // E. 更新步驟 (先清理關聯表，再刪除重建步驟)
+    // 1. 取得這份食譜舊的所有步驟 ID，用來刪除步驟食材關聯
+    $stmtOldSteps = $pdo->prepare("SELECT step_id FROM steps WHERE recipe_id = ?");
+    $stmtOldSteps->execute([$recipe_id]);
+    $oldStepIds = $stmtOldSteps->fetchAll(PDO::FETCH_COLUMN);
+
+    if (!empty($oldStepIds)) {
+        $placeholders = implode(',', array_fill(0, count($oldStepIds), '?'));
+        $pdo->prepare("DELETE FROM step_ingredients WHERE step_id IN ($placeholders)")->execute($oldStepIds);
+    }
+
+    // 2. 刪除並重建步驟
     $pdo->prepare("DELETE FROM steps WHERE recipe_id = ?")->execute([$recipe_id]);
     if (!empty($input['steps'])) {
         $sqlStep = "INSERT INTO steps (recipe_id, step_order, step_title, step_content, step_image_url, step_total_time, is_modified) VALUES (?, ?, ?, ?, ?, ?, ?)";
         $stmtStep = $pdo->prepare($sqlStep);
+
+        // 準備步驟食材插入語句
+        $sqlStepIng = "INSERT INTO step_ingredients (step_id, ingredient_id, step_ingredient_amount, unit_name) VALUES (?, ?, ?, ?)";
+        $stmtStepIng = $pdo->prepare($sqlStepIng);
+
         foreach ($input['steps'] as $index => $step) {
             $stepImg = $step['step_image_url'] ?? '';
             if (!empty($stepImg) && strpos($stepImg, 'data:image') === 0) {
@@ -137,8 +153,20 @@ try {
                 $step['step_content'] ?? '',
                 $stepImg,
                 formatDbTime($step['step_total_time'] ?? '00:05:00'),
-                (isset($step['is_modified']) && $step['is_modified'] === 1) ? 1 : 0
+                (isset($step['is_modified']) && $step['is_modified'] == 1) ? 1 : 0
             ]);
+
+            $current_step_id = $pdo->lastInsertId();
+
+            // 🏆 關鍵修正：同步插入步驟與食材的關聯
+            if (!empty($step['step_ingredients']) && is_array($step['step_ingredients'])) {
+                foreach ($step['step_ingredients'] as $ing) {
+                    $ing_id = is_array($ing) ? ($ing['ingredient_id'] ?? null) : $ing;
+                    if ($ing_id && is_numeric($ing_id)) {
+                        $stmtStepIng->execute([$current_step_id, $ing_id, 0, '份']);
+                    }
+                }
+            }
         }
     }
 
@@ -158,6 +186,6 @@ try {
     echo json_encode(["success" => true, "message" => "改編食譜已成功更新"]);
 
 } catch (Exception $e) {
-    if ($pdo->inTransaction()) $pdo->rollBack();
+    if ($pdo && $pdo->inTransaction()) $pdo->rollBack();
     echo json_encode(["success" => false, "message" => "更新失敗: " . $e->getMessage()]);
 }

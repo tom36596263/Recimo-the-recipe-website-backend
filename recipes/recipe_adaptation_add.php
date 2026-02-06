@@ -138,7 +138,6 @@ try {
         $stmtStepIng = $pdo->prepare($sqlStepIng);
 
         foreach ($input['steps'] as $index => $step) {
-            // 🏆 修正點：步驟圖存入 steps 資料夾，檔名使用序號 (1.png, 2.png...)
             $stepImgPath = saveBase64Image($step['step_image_url'] ?? '', $new_recipe_id, ($index + 1), "steps");
             
             $stmtStep->execute([
@@ -153,10 +152,13 @@ try {
 
             $current_step_id = $pdo->lastInsertId();
 
-            // 寫入步驟食材
+            // 🏆 修正後的步驟食材寫入邏輯
             if (!empty($step['step_ingredients']) && is_array($step['step_ingredients'])) {
-                foreach ($step['step_ingredients'] as $ing_id) {
-                    if (is_numeric($ing_id)) {
+                foreach ($step['step_ingredients'] as $ing) {
+                    // 同時支援純數字 ID 陣列 [14, 15] 或是物件陣列 [{"ingredient_id": 14}, ...]
+                    $ing_id = is_array($ing) ? ($ing['ingredient_id'] ?? null) : $ing;
+                    
+                    if ($ing_id && is_numeric($ing_id)) {
                         $stmtStepIng->execute([$current_step_id, $ing_id, 0, '份']);
                     }
                 }
