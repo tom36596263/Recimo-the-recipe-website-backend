@@ -163,9 +163,21 @@ else if ($method === 'POST' && $action === 'update') {
         echo json_encode(['status' => 'error', 'message' => '未提供更新資訊']);
     }
     exit;
-    } else {
-        //完整更新商品資料 (包含圖片刪除與所有欄位) 
-        $uploadDir = __DIR__ . '/../img/mall/';
+        } else {
+            //完整更新商品資料 (包含圖片刪除與所有欄位) 
+        if ($isLocal) {
+            // 本機開發環境 (保持原本寫法)
+            $uploadDir = __DIR__ . '/../img/mall/';
+        } else {
+            // 伺服器部署環境 (tibamef2e) - 使用絕對路徑
+            // $_SERVER['DOCUMENT_ROOT'] 會抓到伺服器的根目錄
+            $uploadDir = $_SERVER['DOCUMENT_ROOT'] . '/cjd102/g2/recimo/img/mall/';
+        }
+
+        // 檢查資料夾是否存在，不存在就建立 (預防措施)
+        if (!file_exists($uploadDir)) {
+            mkdir($uploadDir, 0777, true);
+        }
 
         // 先從資料庫查出「原本的圖片」做為刪除對照
         $stmtSelect = $pdo->prepare("SELECT PRODUCT_IMAGE FROM products WHERE PRODUCT_ID = :id");
