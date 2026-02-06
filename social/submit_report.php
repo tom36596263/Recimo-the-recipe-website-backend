@@ -20,7 +20,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $target_type = $input['target_type'] ?? null; 
     $target_id   = $input['target_id']   ?? null;
     
-    // 取得標籤文字並去除可能的前後空白
     $reason_raw  = isset($input['reason']) ? trim($input['reason']) : ''; 
     $note        = trim($input['note']   ?? ''); 
 
@@ -29,17 +28,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $id_column = "";
         $type_map = [];
 
-        // 🏆 根據 target_type 決定資料表，並對應前端 Vue 的 reasons 文字
+        /**
+         * 🏆 統一全站類型定義 (後台顯示會根據此數字翻譯)
+         * 1:垃圾訊息, 2:仇恨言論, 3:色情內容, 4:不實資訊, 5:內容侵權, 6:其他
+         */
         switch ($target_type) {
             case 'gallery':
                 $table = "reported_galleries";
                 $id_column = "gallery_id";
                 $type_map = [
-                    '垃圾訊息 / 廣告' => 1, 
-                    '色情或不當內容' => 2, 
-                    '內容侵權 (盜圖或盜文)' => 3, 
-                    '仇恨或攻擊言論' => 4, 
-                    '其他原因' => 5
+                    '內容侵權 (盜圖或盜文)' => 5,
+                    '垃圾訊息 / 廣告'      => 1,
+                    '色情或不當內容'      => 3,
+                    '仇恨或攻擊言論'      => 2,
+                    '其他原因'           => 6
                 ];
                 break;
 
@@ -47,11 +49,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $table = "reported_recipes";
                 $id_column = "recipe_id";
                 $type_map = [
-                    '內容侵權 (盜圖或盜文)' => 2, 
-                    '垃圾訊息 / 廣告' => 1, 
-                    '不實資訊 / 錯誤的食譜步驟' => 4,
-                    '仇恨或不當言論' => 3, 
-                    '其他原因' => 5
+                    '內容侵權 (盜圖或盜文)'      => 5,
+                    '垃圾訊息 / 廣告'           => 1,
+                    '不實資訊 / 錯誤的食譜步驟'  => 4,
+                    '仇恨或不當言論'           => 2,
+                    '其他原因'                => 6
                 ];
                 break;
 
@@ -59,11 +61,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $table = "reported_comments";
                 $id_column = "comment_id";
                 $type_map = [
-                    '垃圾訊息 / 廣告' => 1, 
-                    '仇恨或攻擊言論' => 2, 
-                    '色情或不當內容' => 3, 
-                    '不實資訊' => 4, 
-                    '其他原因' => 5
+                    '垃圾訊息 / 廣告' => 1,
+                    '仇恨或攻擊言論' => 2,
+                    '色情或不當內容' => 3,
+                    '不實資訊'      => 4,
+                    '其他原因'      => 6
                 ];
                 break;
 
@@ -71,13 +73,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new Exception('不支援的類型: ' . $target_type);
         }
 
-        // 🏆 判定類型 ID (如果文字對不上，就會變成 5)
-        $report_type_int = $type_map[$reason_raw] ?? 5;
+        // 判定類型 ID，若找不到文字則歸類為 6 (其他)
+        $report_type_int = $type_map[$reason_raw] ?? 6;
 
-        // 🏆 處理文字內容：優先存 note (補充說明)，沒填則存標籤文字
+        // 處理文字內容：優先存 note (補充說明)，沒填則存標籤文字
         $final_reason = !empty($note) ? $note : $reason_raw;
 
-        // 🏆 執行 SQL 插入
+        // 執行 SQL 插入
         $sql = "INSERT INTO $table ($id_column, reporter_id, report_type, report_reason, status, handler_id, reported_at, update_at) 
                 VALUES (:target_id, :reporter_id, :report_type, :reason, 0, NULL, NOW(), NULL)";
         
@@ -96,7 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } catch (PDOException $e) {
         echo json_encode([
             'status' => 'error', 
-            'message' => '資料庫錯誤，請聯繫管理員',
+            'message' => '資料庫錯誤',
             'sql_error' => $e->getMessage()
         ]);
     } catch (Exception $e) {

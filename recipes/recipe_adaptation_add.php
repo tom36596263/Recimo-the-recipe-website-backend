@@ -3,7 +3,7 @@
 
 require_once '../config/cors.php';
 require_once '../config/db_config.php';
-// 🏆 引入你的營養計算小幫手
+// 🏆 引入營養計算小幫手
 require_once './nutritionhelper.php'; 
 
 header('Content-Type: application/json; charset=utf-8');
@@ -11,7 +11,7 @@ header('Content-Type: application/json; charset=utf-8');
 $rawInput = file_get_contents("php://input");
 $input = json_decode($rawInput, true);
 
-// 1. 基礎驗證：檢查必要欄位是否缺失或無效
+// 1. 基礎驗證
 $required_fields = ['author_id', 'recipe_title']; 
 foreach ($required_fields as $f) {
     if (!isset($input[$f]) || $input[$f] === '' || $input[$f] === 'undefined' || $input[$f] === null) {
@@ -20,20 +20,16 @@ foreach ($required_fields as $f) {
     }
 }
 
-// 🏆 核心修正：確保 author_id 真的存在於 users 表的 user_id 欄位
-// 這裡解決你遇到的「找不到該用戶 ID」錯誤
+// 2. 確保用戶存在
 $checkUser = $pdo->prepare("SELECT user_id FROM users WHERE user_id = ?");
 $checkUser->execute([$input['author_id']]);
 if (!$checkUser->fetch()) {
-    echo json_encode([
-        "success" => false, 
-        "message" => "發布失敗：資料庫找不到用戶 ID (" . $input['author_id'] . ")，請確認登入狀態。"
-    ]);
+    echo json_encode(["success" => false, "message" => "發布失敗：找不到用戶 ID"]);
     exit;
 }
 
 /**
- * [時間格式校正] 處理 00:60:00 類型的錯誤
+ * 時間格式校正
  */
 function formatDbTime($timeInput) {
     if (empty($timeInput)) return '00:05:00';
@@ -49,29 +45,37 @@ function formatDbTime($timeInput) {
 }
 
 /**
- * [圖片處理] 將 Base64 儲存為實體檔案
+ * 圖片儲存：支援子目錄
  */
-function saveBase64Image($base64Data, $recipeId, $fileName) {
+function saveBase64Image($base64Data, $recipeId, $fileName, $subDir = "") {
     if (empty($base64Data)) return null;
-    // 如果已經是路徑則直接回傳，避免重複儲存
     if (!preg_match('/^data:image\/(\w+);base64,/', $base64Data, $type)) {
         return $base64Data; 
     }
+    
     $data = base64_decode(substr($base64Data, strpos($base64Data, ',') + 1));
-    $dir = "../img/recipes/" . $recipeId;
-    if (!is_dir($dir)) mkdir($dir, 0777, true);
-    $filePath = $dir . "/" . $fileName . ".png";
+    
+    // 組合目錄路徑
+    $baseDir = "../img/recipes/" . $recipeId;
+    $targetDir = $subDir ? $baseDir . "/" . $subDir : $baseDir;
+    
+    // 遞迴建立目錄
+    if (!is_dir($targetDir)) mkdir($targetDir, 0777, true);
+    
+    $filePath = $targetDir . "/" . $fileName . ".png";
     file_put_contents($filePath, $data);
-    return "img/recipes/" . $recipeId . "/" . $fileName . ".png";
+    
+    // 回傳資料庫儲存路徑
+    return "img/recipes/" . $recipeId . "/" . ($subDir ? $subDir . "/" : "") . $fileName . ".png";
 }
 
 try {
     $pdo->beginTransaction();
 
-    // 🏆 A. 使用引入的 Helper 計算營養數據
+    // A. 計算營養數據
     $nutri = nutritionhelper::calculate($input, $input['ingredients'] ?? [], $pdo);
 
-    // B. 插入主食譜 (插入時暫不填圖片路徑)
+    // B. 插入主食譜
     $sqlMain = "INSERT INTO recipes (
         parent_recipe_id, author_id, recipe_title, recipe_description, 
         recipe_image_url, recipe_total_time, recipe_difficulty, recipe_servings,
@@ -86,7 +90,7 @@ try {
         $input['author_id'],
         $input['recipe_title'],
         $input['recipe_description'] ?? '', 
-        '', // 圖片路徑先留空，等拿到 ID 再更新
+        '', 
         formatDbTime($input['total_time'] ?? $input['recipe_total_time'] ?? '00:30:00'),
         $input['recipe_difficulty'] ?? 1,
         $input['recipe_servings'] ?? 1,
@@ -102,20 +106,18 @@ try {
 
     $new_recipe_id = $pdo->lastInsertId();
 
-    // C. 處理圖片儲存與更新路徑 (Cover Image)
+    // C. 更新圖片 (封面放在根目錄)
     $finalCoverPath = saveBase64Image($input['recipe_image_url'] ?? '', $new_recipe_id, "cover");
     if ($finalCoverPath) {
         $pdo->prepare("UPDATE recipes SET recipe_image_url = ? WHERE recipe_id = ?")->execute([$finalCoverPath, $new_recipe_id]);
     }
 
-    // D. 插入食材 (過濾無效 ID)
+    // D. 插入食材
     if (!empty($input['ingredients'])) {
         $sqlIng = "INSERT INTO recipe_ingredients (recipe_id, ingredient_id, amount, unit_name, remark, is_modified) VALUES (?, ?, ?, ?, ?, ?)";
         $stmtIng = $pdo->prepare($sqlIng);
         foreach ($input['ingredients'] as $ing) {
-            // 跳過沒 ID 的食材（例如前端傳來的暫存 ID 'id-xxx'）
             if (!isset($ing['ingredient_id']) || !is_numeric($ing['ingredient_id'])) continue; 
-            
             $stmtIng->execute([
                 $new_recipe_id,
                 $ing['ingredient_id'],
@@ -127,12 +129,18 @@ try {
         }
     }
 
-    // E. 插入步驟
+    // E. 插入步驟與步驟食材
     if (!empty($input['steps'])) {
         $sqlStep = "INSERT INTO steps (recipe_id, step_order, step_title, step_content, step_image_url, step_total_time, is_modified) VALUES (?, ?, ?, ?, ?, ?, ?)";
         $stmtStep = $pdo->prepare($sqlStep);
+
+        $sqlStepIng = "INSERT INTO step_ingredients (step_id, ingredient_id, step_ingredient_amount, unit_name) VALUES (?, ?, ?, ?)";
+        $stmtStepIng = $pdo->prepare($sqlStepIng);
+
         foreach ($input['steps'] as $index => $step) {
-            $stepImgPath = saveBase64Image($step['step_image_url'] ?? '', $new_recipe_id, "step_" . ($index + 1));
+            // 🏆 修正點：步驟圖存入 steps 資料夾，檔名使用序號 (1.png, 2.png...)
+            $stepImgPath = saveBase64Image($step['step_image_url'] ?? '', $new_recipe_id, ($index + 1), "steps");
+            
             $stmtStep->execute([
                 $new_recipe_id,
                 $index + 1,
@@ -142,10 +150,21 @@ try {
                 formatDbTime($step['step_total_time'] ?? '00:05:00'),
                 (isset($step['is_modified']) && $step['is_modified'] == true) ? 1 : 0
             ]);
+
+            $current_step_id = $pdo->lastInsertId();
+
+            // 寫入步驟食材
+            if (!empty($step['step_ingredients']) && is_array($step['step_ingredients'])) {
+                foreach ($step['step_ingredients'] as $ing_id) {
+                    if (is_numeric($ing_id)) {
+                        $stmtStepIng->execute([$current_step_id, $ing_id, 0, '份']);
+                    }
+                }
+            }
         }
     }
 
-    // F. 插入標籤
+    // F. 標籤
     if (!empty($input['tags'])) {
         $sqlTag = "INSERT INTO recipe_tag (recipe_id, tag_id) VALUES (?, ?)";
         $stmtTag = $pdo->prepare($sqlTag);

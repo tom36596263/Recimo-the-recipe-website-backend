@@ -60,13 +60,13 @@ try {
     // A. 重新計算營養數據
     $nutri = nutritionhelper::calculate($input, $input['ingredients'] ?? [], $pdo);
 
-    // B. 處理圖片：判斷是新上傳的 Base64 還是舊有的 URL
+    // B. 處理圖片
     $finalCoverPath = $input['recipe_image_url'] ?? ''; 
     if (!empty($finalCoverPath) && strpos($finalCoverPath, 'data:image') === 0) {
         $finalCoverPath = saveBase64Image($finalCoverPath, $recipe_id, "cover");
     }
 
-    // C. 更新主食譜 (包含圖片欄位，避免 Integrity constraint violation)
+    // C. 更新主食譜 (🏆 已補上 recipe_created_at = NOW() 以更新時間)
     $sqlMain = "UPDATE recipes SET 
         recipe_title = ?, 
         recipe_description = ?, 
@@ -79,14 +79,15 @@ try {
         recipe_kcal_per_100g = ?, 
         recipe_protein_per_100g = ?, 
         recipe_fat_per_100g = ?, 
-        recipe_carbs_per_100g = ?
+        recipe_carbs_per_100g = ?,
+        recipe_created_at = NOW() 
         WHERE recipe_id = ? AND author_id = ?"; 
 
     $stmt = $pdo->prepare($sqlMain);
     $stmt->execute([
         $input['recipe_title'],
         $input['recipe_description'] ?? '', 
-        $finalCoverPath, // 確保這裡不是 null
+        $finalCoverPath,
         formatDbTime($input['total_time'] ?? $input['recipe_total_time'] ?? '00:30:00'),
         $input['recipe_difficulty'] ?? 1,
         $input['recipe_servings'] ?? 1,
