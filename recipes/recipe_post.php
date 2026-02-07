@@ -184,39 +184,56 @@ try {
 
         foreach ($input['steps'] as $index => $step) {
                         // ✨ 修正：在這裡定義步驟專用的變數
-        $stepImgPath = saveBase64Image($step['image'] ?? '', $target_id, "step_" . ($index + 1));
-            $stepTime = formatDbTime($step['time'] ?? 0);
+            $stepImgPath = saveBase64Image($step['image'] ?? '', $target_id, "step_" . ($index + 1));
+                $stepTime = formatDbTime($step['time'] ?? 0);
 
-        $stmtStep->execute([
-            $target_id,
-            $index + 1,
-            $step['title'] ?? '',
-            $step['content'] ?? '',
-            $stepImgPath,
-            $stepTime,
-            $step['is_modified'] ?? 0
-        ]);
+            $stmtStep->execute([
+                $target_id,
+                $index + 1,
+                $step['title'] ?? '',
+                $step['content'] ?? '',
+                $stepImgPath,
+                $stepTime,
+                $step['is_modified'] ?? 0
+            ]);
 
-        $current_step_id = $pdo->lastInsertId();
+            $current_step_id = $pdo->lastInsertId();
 
-                        // 處理步驟食材關聯 (tags)
-        if (!empty($step['tags']) && is_array($step['tags'])) {
-            $uniqueTags = array_unique($step['tags']);
-            foreach ($uniqueTags as $ingId) {
-                if (is_numeric($ingId)) {
-                        $stmtStepIng->execute([
-                        $current_step_id,
-                        (int)$ingId,
-                            0, // 步驟標籤通常不計量
-                        ''
-                    ]);
+                            // 處理步驟食材關聯 (tags)
+            if (!empty($step['tags']) && is_array($step['tags'])) {
+                $uniqueTags = array_unique($step['tags']);
+                foreach ($uniqueTags as $ingId) {
+                    if (is_numeric($ingId)) {
+                            $stmtStepIng->execute([
+                            $current_step_id,
+                            (int)$ingId,
+                                0, // 步驟標籤通常不計量
+                            ''
+                        ]);
 
+                    }
                 }
             }
         }
     }
+
+    // 7. 插入食譜標籤 (新增這段)
+    if (isset($input['tags']) && is_array($input['tags'])) {
+        // 如果是更新模式，先刪除舊標籤
+        if ($mode === 'update') {
+            $pdo->prepare("DELETE FROM recipe_tag WHERE recipe_id = ?")->execute([$target_id]);
+        }
+
+        $sqlTag = "INSERT INTO recipe_tag (recipe_id, tag_id) VALUES (?, ?)";
+        $stmtTag = $pdo->prepare($sqlTag);
         
+        foreach ($input['tags'] as $tagId) {
+            if (!empty($tagId)) {
+                $stmtTag->execute([$target_id, (int)$tagId]);
+            }
+        }
     }
+
     $sqlCalculateNutrition = "
         UPDATE recipes r
         SET 
