@@ -100,6 +100,19 @@ if ($new_order_status !== null) {
     $stmt_items->execute([':oid' => $order_id]);
     $items = $stmt_items->fetchAll(PDO::FETCH_ASSOC);
 
+    foreach ($items as &$item) {
+        if (isset($item['product_qty'])) {
+            $item['product_qty'] = (int)$item['product_qty']; 
+        }
+
+        if (isset($item['subtotal'])) {
+            $item['subtotal'] = (float)$item['subtotal'];
+        }
+        if (isset($item['snapshot_price'])) {
+            $item['snapshot_price'] = (float)$item['snapshot_price'];
+        }
+    }
+
     // ---------------------------------------------------------
     // 5. 輸出整合結果
     // ---------------------------------------------------------

@@ -56,8 +56,8 @@ try {
     // ReturnURL: 綠界伺服器背景呼叫 (Server post to Server)，不可為 Localhost
     $obj->Send['ReturnURL']         = "https://tibamef2e.com/cjd102/g2/recimo/mall/callback.php"; 
     // OrderResultURL: 用戶付款完成後，綠界將用戶導回的頁面 (Client redirect)
-    // $obj->Send['OrderResultURL']    = "https://tibamef2e.com/cjd102/g2/recimo/workspace/orders";
-    $obj->Send['OrderResultURL']    = " https://squeakier-mona-inartistically.ngrok-free.dev/recimo_api/mall/ecpay_checkout_return_url.php";
+    $obj->Send['OrderResultURL']    = "https://tibamef2e.com/cjd102/g2/recimo/workspace/orders";
+    // $obj->Send['OrderResultURL']    = " https://squeakier-mona-inartistically.ngrok-free.dev/recimo_api/mall/ecpay_checkout_return_url.php";
     // NeedExtraPaidInfo: 是否需要額外的付款資訊 (如信用卡末四碼)
     $obj->Send['NeedExtraPaidInfo'] = 'Y';
 

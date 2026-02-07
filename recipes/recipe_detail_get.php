@@ -9,7 +9,6 @@ header('Content-Type: application/json; charset=utf-8');
 
 /**
  * 取得特定食譜的所有標籤
- * (你拆出來的功能，放在檔案上方或 require 其他檔案皆可)
  */
 function getRecipeTags($pdo, $recipe_id) {
     $sql = "SELECT rt.tag_id, t.tag_name, t.tag_type
@@ -37,8 +36,8 @@ try {
 
     $result = [];
 
-    // --- 1. 取得主食譜資訊 (正確對接 author_id) ---
-$sqlMain = "SELECT 
+    // --- 1. 取得主食譜資訊 (🏆 修正：加入 r.status = 0) ---
+    $sqlMain = "SELECT 
                 r.*, 
                 p.recipe_title as parent_recipe_title,
                 u.user_name as author_name,
@@ -46,16 +45,16 @@ $sqlMain = "SELECT
                 u.user_url as author_image
             FROM recipes r
             LEFT JOIN recipes p ON r.parent_recipe_id = p.recipe_id 
-            /* 🏆 關鍵修正：使用資料表實際存在的 author_id 欄位 */
             LEFT JOIN users u ON r.author_id = u.user_id 
-            WHERE r.recipe_id = ?
+            WHERE r.recipe_id = ? AND r.status = 0
             LIMIT 1";
     $stmt = $pdo->prepare($sqlMain);
     $stmt->execute([$recipe_id]);
     $main = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$main) {
-        echo json_encode(['success' => false, 'message' => '找不到該食譜']);
+        // 如果食譜 status 不為 0，會直接進到這裡
+        echo json_encode(['success' => false, 'message' => '找不到該食譜或該食譜已被下架']);
         exit;
     }
     $result['main'] = $main;
@@ -91,17 +90,17 @@ $sqlMain = "SELECT
     }
     $result['steps'] = $steps;
 
-    // --- 4. 取得主食譜標籤 (使用拆出的函式) ---
+    // --- 4. 取得主食譜標籤 ---
     $result['tags'] = getRecipeTags($pdo, $recipe_id);
 
-    // --- 4.5 核心修正：取得改編版本及其完整詳細資料 ---
+    // --- 4.5 核心修正：取得改編版本 (🏆 修正：加入 r.status = 0) ---
     $sqlAdaptations = "SELECT 
                         r.*, 
                         u.user_name as author_name,
                         u.user_url as author_image
                     FROM recipes r
                     LEFT JOIN users u ON r.author_id = u.user_id 
-                    WHERE r.parent_recipe_id = ? AND r.recipe_id != ?";
+                    WHERE r.parent_recipe_id = ? AND r.recipe_id != ? AND r.status = 0";
     $stmtAdapt = $pdo->prepare($sqlAdaptations);
     $stmtAdapt->execute([$recipe_id, $recipe_id]);
     $adaptations = $stmtAdapt->fetchAll(PDO::FETCH_ASSOC);
@@ -110,13 +109,19 @@ $sqlMain = "SELECT
         $child_id = $child['recipe_id'];
 
         // A. 抓取該改編版本的食材
-        $sqlChildIng = "SELECT ri.*, i.ingredient_name, i.kcal_per_100g, i.protein_per_100g, 
-                                i.fat_per_100g, i.carbs_per_100g, i.gram_conversion,
-                                ri.remark
-                        FROM recipe_ingredients ri
-                        JOIN ingredients i ON ri.ingredient_id = i.ingredient_id
-                        WHERE ri.recipe_id = ?";
-        $stmtChildIng = $pdo->prepare($sqlChildIng);
+        $sqlChildIng = "SELECT ri.*, 
+                        i.ingredient_name as name, 
+                        i.ingredient_name, 
+                        i.kcal_per_100g, 
+                        i.protein_per_100g, 
+                        i.fat_per_100g, 
+                        i.carbs_per_100g, 
+                        i.gram_conversion,
+                        ri.remark
+                FROM recipe_ingredients ri
+                JOIN ingredients i ON ri.ingredient_id = i.ingredient_id
+                WHERE ri.recipe_id = ?";
+        $stmtChildIng = $pdo->prepare($sqlChildChildIng ?? $sqlChildIng); // 修正變數參考
         $stmtChildIng->execute([$child_id]);
         $child['ingredients'] = $stmtChildIng->fetchAll(PDO::FETCH_ASSOC);
 
@@ -139,7 +144,7 @@ $sqlMain = "SELECT
         }
         $child['steps'] = $child_steps;
 
-        // D. 抓取改編版本的標籤 (同樣使用函式)
+        // D. 抓取改編版本的標籤
         $child['tags'] = getRecipeTags($pdo, $child_id);
     }
     
@@ -152,7 +157,6 @@ $sqlMain = "SELECT
     ], JSON_UNESCAPED_UNICODE);
 
 } catch (Exception $e) {
-    // 安全處理：確保 http_response_code 只接收整數
     $code = $e->getCode();
     if (!is_int($code) || $code < 100 || $code > 599) {
         $code = 500;
@@ -163,3 +167,4 @@ $sqlMain = "SELECT
         'message' => $e->getMessage()
     ], JSON_UNESCAPED_UNICODE);
 }
+?>

@@ -43,7 +43,7 @@ try {
     $stmt_items->execute([':oid' => $order_id]);
     $order['items'] = $stmt_items->fetchAll(PDO::FETCH_ASSOC);
 
-    echo json_encode($order, JSON_UNESCAPED_UNICODE);
+    echo json_encode($order, JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);
 } catch (PDOException $e) {
     echo json_encode(["error" => $e->getMessage()]);
 }
