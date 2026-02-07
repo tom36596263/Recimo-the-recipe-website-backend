@@ -3,20 +3,41 @@
 // 第一步：引入 CORS 權限設定 (必須放在程式碼最上方)
 // ---------------------------------------------------------
 require_once '../config/cors.php';
-session_start();
 
 // ---------------------------------------------------------
 // 第二步：引入資料庫連線設定
 // ---------------------------------------------------------
 require_once '../config/db_config.php';
+session_start();
 
 // ---------------------------------------------------------
 // 第三步：補強設定 - 宣告回傳格式為 JSON (讓前端 Axios 自動解析)
 // ---------------------------------------------------------
-// 提高伺服器耐受度 (處理大圖)
-ini_set('memory_limit', '512M');
 header("Content-Type: application/json; charset=UTF-8");
 
+// 提高伺服器耐受度 (處理大圖)
+ini_set('memory_limit', '512M');
+
+// 強制讓 PDO 錯誤顯示，方便除錯
+$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+// 環境與路徑設定(參考admin_products_api.php)
+$isLocal = (str_contains($_SERVER["HTTP_HOST"], "127.0.0.1") || str_contains($_SERVER["HTTP_HOST"], "localhost"));
+
+if ($isLocal) {
+    // 本機開發環境
+    $upload_dir = __DIR__ . '/../img/mall/';
+} else {
+    // 伺服器部署環境 (使用絕對路徑)
+    $upload_dir = $_SERVER['DOCUMENT_ROOT'] . '/cjd102/g2/recimo/img/mall/';
+}
+
+// 檢查資料夾是否存在，不存在就建立
+if (!file_exists($upload_dir)) {
+    mkdir($upload_dir, 0777, true);
+}
+
+// 解析輸入資料
 $rawInput = file_get_contents("php://input");
 $input = json_decode($rawInput, true);
 
@@ -26,25 +47,17 @@ if (!$input) {
 }
 
 try {
-    // 定義實體存放路徑 (相對於此檔案)
-    $upload_dir = '../img/mall/';
-
-    if (!is_dir($upload_dir)) {
-        mkdir($upload_dir, 0777, true);
-    }
-
     $db_image_list = [];
 
-    // 處理圖片 (最寬鬆邏輯)
+    // 處理 Base64 圖片
     if (!empty($input['recipe_images'])) {
         foreach ($input['recipe_images'] as $img) {
             $base64_string = $img['url'] ?? '';
             if (empty($base64_string)) continue;
 
             if (preg_match('/^data:image\/([^;]+);base64,/', $base64_string, $matches)) {
-
-                $raw_type = $matches[1]; // 這裡會抓到 "svg+xml" 或 "jpeg"
-
+                $raw_type = $matches[1]; 
+                
                 // 統一副檔名邏輯
                 $extension = 'jpg'; // 預設
                 if (strpos($raw_type, 'svg') !== false) {
@@ -56,18 +69,21 @@ try {
                 }
 
                 $data = base64_decode(substr($base64_string, strpos($base64_string, ',') + 1));
-                $file_name = 'prod_' . time() . '_' . uniqid() . '.' . $extension;
+                // 使用 uniqid 確保檔名唯一性，並加上 prod 前綴
+                $file_name = uniqid('prod_') . '.' . $extension;
                 $file_path = $upload_dir . $file_name;
 
                 if (file_put_contents($file_path, $data)) {
                     $db_image_list[] = [
-                        "image_url" => $file_name,
+                        "id" => count($db_image_list) + 1,
+                        "image_url" => "img/mall/" . $file_name, // 儲存相對路徑
                         "is_cover" => (count($db_image_list) === 0)
                     ];
                 }
             }
         }
     }
+
     // 轉為 JSON 字串存入資料庫
     $image_json_to_save = json_encode($db_image_list, JSON_UNESCAPED_UNICODE);
 
@@ -79,8 +95,7 @@ try {
     }
 
     // ---------------------------------------------------------
-    // 第四步：撰寫 SQL 語句
-    // ---------------------------------------------------------
+    // 第四步：撰寫 SQL 語句---------------------------------------------------------
     $sql = "INSERT INTO `products` (
         `product_name`, `product_category`, `product_image`, `product_description`, 
         `product_price`, `product_kcal`, `product_carbs`, `product_fat`, `product_fiber`, 
@@ -96,10 +111,10 @@ try {
     )";
 
     $stmt = $pdo->prepare($sql);
-    $productName = $input['product_name'] ?? '未命名';// 轉成安全檔名（英文、數字、-）
-$slug = strtolower(trim(preg_replace('/[^A-Za-z0-9-]+/', '-', $productName), '-'));
+    $productName = $input['product_name'] ?? '未命名';
+    
     $params = [
-        ':name' => $productName,
+        ':name'           => $productName,
         ':category'       => $input['product_category'] ?? '',
         ':image'          => $image_json_to_save,
         ':description'    => $input['product_description'] ?? '',
