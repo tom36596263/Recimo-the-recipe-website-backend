@@ -53,6 +53,7 @@ error_log("DEBUG - 步驟資料: " . json_encode($input['steps']));
 try {
     $pdo->beginTransaction();
     $mainTotalTime = formatDbTime($input['totalTime'] ?? 0);
+    $forcedStatus = 0;
     $target_id = null;
 // 3. 插入食譜主表 (12個欄位對應 11個問號 + 1個 NOW())
     if($mode === 'update' && !empty($recipe_id)){
@@ -80,7 +81,7 @@ try {
             $input['difficulty'] ?? 1,
             $input['adapt_title'] ?? $input['title'],
             $input['adapt_description'] ?? '',
-            $input['status'] ?? 0,
+            $forcedStatus,
             $target_id
         ]);
 
@@ -140,7 +141,7 @@ try {
             $input['difficulty'] ?? 1,
             $input['adapt_title'] ?? $input['title'],
             $input['adapt_description'] ?? '',
-            $input['status'] ?? 0
+            $forcedStatus
         ]);
         $target_id = $pdo->lastInsertId();
     }
