@@ -21,37 +21,61 @@ foreach ($required_fields as $f) {
 
 $recipe_id = $input['recipe_id'];
 
-// 複用時間與圖片處理函式
+/**
+ * 時間格式校正
+ */
 function formatDbTime($timeInput) {
-    if (empty($timeInput)) return '00:30:00';
-    if (is_numeric($timeInput)) {
-        $hrs = floor($timeInput / 60);
-        $mins = $timeInput % 60;
-        return sprintf('%02d:%02d:00', $hrs, $mins);
+    if (empty($timeInput)) return '00:05:00';
+    if (preg_match('/^(\d+):(\d+):(\d+)$/', $timeInput, $matches)) {
+        $h = (int)$matches[1]; $m = (int)$matches[2]; $s = (int)$matches[3];
+        $m += floor($s / 60); $s %= 60;
+        $h += floor($m / 60); $m %= 60;
+    } else {
+        $totalMinutes = intval($timeInput);
+        $h = floor($totalMinutes / 60); $m = $totalMinutes % 60; $s = 0;
     }
-    return $timeInput;
+    return sprintf('%02d:%02d:%02d', $h, $m, $s);
 }
 
-function saveBase64Image($base64Data, $recipeId, $fileName) {
-    if (empty($base64Data) || strpos($base64Data, 'data:image') !== 0) return $base64Data;
-    
-    $targetDir = "../uploads/recipes/";
-    if (!is_dir($targetDir)) mkdir($targetDir, 0777, true);
-    
-    $extension = 'jpg';
-    if (strpos($base64Data, 'data:image/png') === 0) $extension = 'png';
-    else if (strpos($base64Data, 'data:image/webp') === 0) $extension = 'webp';
-    
-    $data = explode(',', $base64Data);
-    $decodedData = base64_decode($data[1]);
-    
-    $fullFileName = "recipe_" . $recipeId . "_" . $fileName . "_" . time() . "." . $extension;
-    $filePath = $targetDir . $fullFileName;
-    
-    if (file_put_contents($filePath, $decodedData)) {
-        return "uploads/recipes/" . $fullFileName;
+/**
+ * 圖片儲存：統一存向 img/recipes 夾，並具備自動去網址邏輯
+ */
+function saveBase64Image($base64Data, $recipeId, $fileName, $subDir = "") {
+    if (empty($base64Data)) return null;
+
+    // 🏆 編輯保護邏輯：如果資料已經是完整網址，代表「沒換新圖」，直接去頭回傳路徑
+    if (strpos($base64Data, 'http') === 0) {
+        $pos = strpos($base64Data, 'img/');
+        if ($pos !== false) {
+            return substr($base64Data, $pos);
+        }
+        return $base64Data;
     }
-    return "";
+
+    if (!preg_match('/^data:image\/(\w+);base64,/', $base64Data, $type)) {
+        return $base64Data; 
+    }
+    
+    $data = base64_decode(substr($base64Data, strpos($base64Data, ',') + 1));
+    
+    // 組合目錄路徑 (相對路徑)
+    $baseDir = "../img/recipes/" . $recipeId;
+    $targetDir = $subDir ? $baseDir . "/" . $subDir : $baseDir;
+    
+    // 遞迴建立目錄 (配合 FTP 777 權限)
+    if (!is_dir($targetDir)) {
+        mkdir($targetDir, 0777, true);
+        chmod($targetDir, 0777);
+    }
+    
+    $filePath = $targetDir . "/" . $fileName . ".png";
+    file_put_contents($filePath, $data);
+    
+    // 確保新檔案能被瀏覽器讀取
+    chmod($filePath, 0666);
+    
+    // 回傳資料庫儲存路徑
+    return "img/recipes/" . $recipeId . "/" . ($subDir ? $subDir . "/" : "") . $fileName . ".png";
 }
 
 try {
@@ -60,13 +84,10 @@ try {
     // A. 重新計算營養數據
     $nutri = nutritionhelper::calculate($input, $input['ingredients'] ?? [], $pdo);
 
-    // B. 處理圖片：判斷是新上傳的 Base64 還是舊有的 URL
-    $finalCoverPath = $input['recipe_image_url'] ?? ''; 
-    if (!empty($finalCoverPath) && strpos($finalCoverPath, 'data:image') === 0) {
-        $finalCoverPath = saveBase64Image($finalCoverPath, $recipe_id, "cover");
-    }
+    // B. 處理圖片 (更新封面)
+    $finalCoverPath = saveBase64Image($input['recipe_image_url'] ?? '', $recipe_id, "cover");
 
-    // C. 更新主食譜 (包含圖片欄位，避免 Integrity constraint violation)
+    // C. 更新主食譜
     $sqlMain = "UPDATE recipes SET 
         recipe_title = ?, 
         recipe_description = ?, 
@@ -79,14 +100,15 @@ try {
         recipe_kcal_per_100g = ?, 
         recipe_protein_per_100g = ?, 
         recipe_fat_per_100g = ?, 
-        recipe_carbs_per_100g = ?
+        recipe_carbs_per_100g = ?,
+        recipe_created_at = NOW() 
         WHERE recipe_id = ? AND author_id = ?"; 
 
     $stmt = $pdo->prepare($sqlMain);
     $stmt->execute([
         $input['recipe_title'],
         $input['recipe_description'] ?? '', 
-        $finalCoverPath, // 確保這裡不是 null
+        $finalCoverPath,
         formatDbTime($input['total_time'] ?? $input['recipe_total_time'] ?? '00:30:00'),
         $input['recipe_difficulty'] ?? 1,
         $input['recipe_servings'] ?? 1,
@@ -113,21 +135,31 @@ try {
                 $ing['amount'] ?? 0,
                 $ing['unit_name'] ?? '份',
                 $ing['remark'] ?? '',
-                (isset($ing['is_modified']) && $ing['is_modified'] === 1) ? 1 : 0
+                (isset($ing['is_modified']) && $ing['is_modified'] == 1) ? 1 : 0
             ]);
         }
     }
 
-    // E. 更新步驟 (先刪除後重新插入)
+    // E. 更新步驟
+    $stmtOldSteps = $pdo->prepare("SELECT step_id FROM steps WHERE recipe_id = ?");
+    $stmtOldSteps->execute([$recipe_id]);
+    $oldStepIds = $stmtOldSteps->fetchAll(PDO::FETCH_COLUMN);
+
+    if (!empty($oldStepIds)) {
+        $placeholders = implode(',', array_fill(0, count($oldStepIds), '?'));
+        $pdo->prepare("DELETE FROM step_ingredients WHERE step_id IN ($placeholders)")->execute($oldStepIds);
+    }
+
     $pdo->prepare("DELETE FROM steps WHERE recipe_id = ?")->execute([$recipe_id]);
     if (!empty($input['steps'])) {
         $sqlStep = "INSERT INTO steps (recipe_id, step_order, step_title, step_content, step_image_url, step_total_time, is_modified) VALUES (?, ?, ?, ?, ?, ?, ?)";
         $stmtStep = $pdo->prepare($sqlStep);
+        $sqlStepIng = "INSERT INTO step_ingredients (step_id, ingredient_id, step_ingredient_amount, unit_name) VALUES (?, ?, ?, ?)";
+        $stmtStepIng = $pdo->prepare($sqlStepIng);
+
         foreach ($input['steps'] as $index => $step) {
-            $stepImg = $step['step_image_url'] ?? '';
-            if (!empty($stepImg) && strpos($stepImg, 'data:image') === 0) {
-                $stepImg = saveBase64Image($stepImg, $recipe_id, "step_" . ($index + 1));
-            }
+            // 🏆 修正後的步驟圖片處理邏輯
+            $stepImg = saveBase64Image($step['step_image_url'] ?? '', $recipe_id, ($index + 1), "steps");
 
             $stmtStep->execute([
                 $recipe_id,
@@ -136,8 +168,19 @@ try {
                 $step['step_content'] ?? '',
                 $stepImg,
                 formatDbTime($step['step_total_time'] ?? '00:05:00'),
-                (isset($step['is_modified']) && $step['is_modified'] === 1) ? 1 : 0
+                (isset($step['is_modified']) && $step['is_modified'] == 1) ? 1 : 0
             ]);
+
+            $current_step_id = $pdo->lastInsertId();
+
+            if (!empty($step['step_ingredients']) && is_array($step['step_ingredients'])) {
+                foreach ($step['step_ingredients'] as $ing) {
+                    $ing_id = is_array($ing) ? ($ing['ingredient_id'] ?? null) : $ing;
+                    if ($ing_id && is_numeric($ing_id)) {
+                        $stmtStepIng->execute([$current_step_id, $ing_id, 0, '份']);
+                    }
+                }
+            }
         }
     }
 
@@ -157,6 +200,6 @@ try {
     echo json_encode(["success" => true, "message" => "改編食譜已成功更新"]);
 
 } catch (Exception $e) {
-    if ($pdo->inTransaction()) $pdo->rollBack();
+    if ($pdo && $pdo->inTransaction()) $pdo->rollBack();
     echo json_encode(["success" => false, "message" => "更新失敗: " . $e->getMessage()]);
 }

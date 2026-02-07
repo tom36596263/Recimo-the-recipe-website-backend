@@ -41,9 +41,7 @@ try {
     $stmt->execute([':uid' => $current_user_id]);
     $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // 即使沒訂單也回傳空陣列 [] 而不是報錯，這對前端比較友善
-    echo json_encode($orders ?: [], JSON_UNESCAPED_UNICODE);
-
+    echo json_encode($orders ?: [], JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);
 } catch (PDOException $e) {
     http_response_code(500);
     echo json_encode(["error" => "系統錯誤: " . $e->getMessage()]);
