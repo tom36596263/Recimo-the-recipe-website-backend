@@ -24,7 +24,7 @@ try {
                 u.user_url as user_avatar 
                 FROM recipe_comments rc
                 LEFT JOIN users u ON rc.user_id = u.user_id 
-                WHERE rc.recipe_id = ? AND rc.status = 0 
+                WHERE rc.recipe_id = ? AND rc.is_display = 1
                 ORDER BY rc.comment_at DESC';
             
             $stmt = $pdo->prepare($sql);
@@ -61,8 +61,8 @@ try {
 
                 // 🏆 修正：新增留言時，明確指定 status = 0 (正常顯示)
                 // 原本的 is_display 保留（如果資料庫有此欄位），但主要是對應你現在的 status 機制
-                $sql = 'INSERT INTO recipe_comments (recipe_id, user_id, comment_text, comment_at, status, is_display, like_count) 
-                        VALUES (?, ?, ?, NOW(), 0, 1, 0)';
+                $sql = 'INSERT INTO recipe_comments (recipe_id, user_id, comment_text, comment_at, is_display, like_count) 
+                        VALUES (?, ?, ?, NOW(), 1, 0)';
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute([$recipe_id, $user_id, $content]);
                 echo json_encode(['success' => true, 'message' => '新增成功']);
