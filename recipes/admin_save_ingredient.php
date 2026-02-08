@@ -40,10 +40,10 @@ try {
 
         // --- 修正後的路徑邏輯 ---
         // 取得專案根目錄
-        $projectRoot = dirname(__DIR__); 
+        $projectRoot = dirname(__DIR__, 2); 
         
         // 設定資料夾結構
-        $folderPath = "/img/ingredients/$main_cat/";
+        $folderPath = "img/ingredients/$main_cat/$sub_cat/";
         
         // 組合實體路徑 (給 move_uploaded_file 用)
         $uploadBase = $projectRoot . $folderPath; 
