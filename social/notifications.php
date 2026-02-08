@@ -5,8 +5,8 @@
  * 
  * 功能：
  * - GET: 獲取通知列表 / 獲取未讀數量
- * - POST: 創建新通知
- * - PATCH: 標記已讀 / 全部標記已讀
+ * - POST: 創建新通知 / 標記已讀 / 全部標記已讀
+ * - PATCH: 標記已讀 / 全部標記已讀（已棄用，建議使用 POST）
  * - DELETE: 刪除通知
  */
 
@@ -121,11 +121,67 @@ function handleGet($pdo) {
 }
 
 /**
- * POST 請求處理：創建新通知
+ * POST 請求處理：創建新通知 / 標記已讀
  */
 function handlePost($pdo) {
     $input = json_decode(file_get_contents('php://input'), true);
     
+    // 判斷操作類型
+    $action = isset($input['action']) ? trim($input['action']) : 'create';
+    
+    // 標記全部為已讀
+    if ($action === 'mark_all_read') {
+        $receiver_id = isset($input['receiver_id']) ? intval($input['receiver_id']) : 0;
+        
+        if (!$receiver_id) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => '缺少 receiver_id']);
+            return;
+        }
+        
+        $sql = "UPDATE notifications SET is_read = 1 WHERE receiver_id = ? AND is_read = 0";
+        $stmt = $pdo->prepare($sql);
+        
+        if ($stmt->execute([$receiver_id])) {
+            echo json_encode([
+                'success' => true,
+                'message' => '已全部標記為已讀',
+                'affected_rows' => $stmt->rowCount()
+            ]);
+        } else {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'message' => '標記失敗']);
+        }
+        return;
+    }
+    
+    // 標記單個為已讀
+    if ($action === 'mark_read') {
+        $notification_id = isset($input['notification_id']) ? intval($input['notification_id']) : 0;
+        $is_read = isset($input['is_read']) ? intval($input['is_read']) : 1;
+        
+        if (!$notification_id) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => '缺少 notification_id']);
+            return;
+        }
+        
+        $sql = "UPDATE notifications SET is_read = ? WHERE notification_id = ?";
+        $stmt = $pdo->prepare($sql);
+        
+        if ($stmt->execute([$is_read, $notification_id])) {
+            echo json_encode([
+                'success' => true,
+                'message' => '已標記為已讀'
+            ]);
+        } else {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'message' => '標記失敗']);
+        }
+        return;
+    }
+    
+    // 創建新通知（預設操作）
     $receiver_id = isset($input['receiver_id']) ? intval($input['receiver_id']) : 0;
     $type = isset($input['notification_type']) ? trim($input['notification_type']) : '';
     $title = isset($input['notification_title']) ? trim($input['notification_title']) : '';

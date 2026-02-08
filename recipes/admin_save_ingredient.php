@@ -30,7 +30,7 @@ try {
         throw new Exception("食材名稱為必填");
     }
 
-    // 2. 圖片上傳處理 (這裡包含我們剛剛修好的絕對路徑邏輯)
+   // 2. 圖片上傳處理 (與 admin_get_ingredients.php 統一環境判斷)
     $imagePath = null;
 
     if (isset($_FILES['ingredient_image']) && $_FILES['ingredient_image']['error'] === UPLOAD_ERR_OK) {
@@ -38,31 +38,46 @@ try {
         $ext = pathinfo($_FILES['ingredient_image']['name'], PATHINFO_EXTENSION);
         $newFileName = time() . '_' . uniqid() . '.' . $ext;
 
-        // --- 修正後的路徑邏輯 ---
-        // 取得專案根目錄
-        $projectRoot = dirname(__DIR__); 
-        
-        // 設定資料夾結構
-        $folderPath = "/img/ingredients/$main_cat/$sub_cat/";
-        
-        // 組合實體路徑 (給 move_uploaded_file 用)
-        $uploadBase = $projectRoot . $folderPath; 
-
-        // 檢查並建立資料夾
-        if (!file_exists($uploadBase)) {
-            mkdir($uploadBase, 0777, true);
+        // 環境判斷 (與 admin_get_ingredients.php 一致)
+        if (!isset($isLocal)) {
+            $isLocal = (str_contains($_SERVER["HTTP_HOST"], "127.0.0.1") || str_contains($_SERVER["HTTP_HOST"], "localhost"));
         }
 
-        $targetFile = $uploadBase . $newFileName;
+        // 根據環境決定專案根目錄
+        if ($isLocal) {
+            // 本地端：recimo_api 就是根目錄
+            $projectRoot = dirname(__DIR__);
+        } else {
+            // 線上版：需要往上兩層（因為檔案在 g2/api/recipes/）
+            $projectRoot = dirname(dirname(__DIR__));
+        } 
+        
+        // 設定相對路徑 (不含根目錄，要存資料庫用的)
+        // 注意：這裡前面不加斜線，讓它變成相對路徑
+        $relativeFolder = "img/ingredients/$main_cat/";
+        
+        // 組合出「電腦/伺服器」看得懂的實體路徑
+        // 使用 DIRECTORY_SEPARATOR 自動切換 Windows(\) 或 Linux(/)
+        $uploadDir = $projectRoot . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relativeFolder);
+
+        // 檢查並建立資料夾
+        if (!file_exists($uploadDir)) {
+            if (!mkdir($uploadDir, 0755, true)) {
+                throw new Exception("無法建立資料夾: " . $uploadDir);
+            }
+        }
+
+        $targetFile = $uploadDir . $newFileName;
 
         if (move_uploaded_file($_FILES['ingredient_image']['tmp_name'], $targetFile)) {
-            // 上傳成功，設定存入資料庫的路徑 (相對路徑，去掉開頭斜線)
-            $imagePath = substr($folderPath, 1) . $newFileName;
+            // 上傳成功，存入資料庫的路徑（相對路徑）
+            $imagePath = $relativeFolder . $newFileName;
         } else {
-            throw new Exception("圖片上傳失敗");
+            throw new Exception("圖片搬移失敗，目標路徑: " . $targetFile);
         }
     }
 
+    
     // 3. 資料庫操作 (判斷是新增還是修改)
     if (!empty($id)) {
         // --- 修改 (UPDATE) ---

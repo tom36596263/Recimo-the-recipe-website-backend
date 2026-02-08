@@ -18,14 +18,16 @@ try {
             }
 
             // 🏆 修正：加入 rc.status = 0，過濾掉被管理員下架 (status=1) 的留言
-            $sql = 'SELECT 
-                rc.*, 
-                u.user_name AS userName, 
-                u.user_url as user_avatar 
-                FROM recipe_comments rc
-                LEFT JOIN users u ON rc.user_id = u.user_id 
-                WHERE rc.recipe_id = ? AND rc.is_display = 1
-                ORDER BY rc.comment_at DESC';
+           $sql = 'SELECT 
+    rc.*, 
+    u.user_name AS userName, 
+    u.user_url as user_avatar 
+    FROM recipe_comments rc
+    LEFT JOIN users u ON rc.user_id = u.user_id 
+    WHERE rc.recipe_id = ? 
+      AND rc.is_display = 1 
+      AND rc.status = 0  -- 🏆 加上這一行，確保只有「非下架」的留言會顯示
+    ORDER BY rc.comment_at DESC';
             
             $stmt = $pdo->prepare($sql);
             $stmt->execute([$recipe_id]);
