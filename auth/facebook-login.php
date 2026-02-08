@@ -56,6 +56,31 @@ if (isset($fbUser['email'])) {
     $stmt->execute([$email]);
     $user = $stmt->fetch();
 
+    // 啟動 Session 並寫入登入狀態
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    
+    // 清除舊 Session 確保乾淨
+    session_unset();
 
-    echo json_encode(['status' => 'success', 'user' => $user]);
+    // 存入 Session，讓後續的 update_user_self.php 認得這個人
+    $_SESSION['user_id']      = $user['user_id'];
+    $_SESSION['user_name']    = $user['user_name'];
+    $_SESSION['user_email']   = $user['user_email'];
+    $_SESSION['user_phone']   = $user['user_phone'] ?? '';
+    $_SESSION['user_address'] = $user['user_address'] ?? '';
+
+    //  統一回傳給前端的資料包格式
+    echo json_encode([
+        'status' => 'success', 
+        'user'   => [
+            'id'           => $user['user_id'],      // 對應 Pinia 的 id
+            'name'         => $user['user_name'],
+            'email'        => $user['user_email'],
+            'image'        => $user['user_url'],
+            'user_phone'   => $user['user_phone'] ?? '',
+            'user_address' => $user['user_address'] ?? ''
+        ]
+    ]);
 }

@@ -108,10 +108,15 @@ session_start();
 $_SESSION['user'] = [
     'user_id' => $final_user['user_id'],
     'user_name' => $final_user['user_name'],
-    'user_email' => $final_user['user_email']
+    'user_email' => $final_user['user_email'],
+    'user_phone'   => $final_user['user_phone'] ?? '',
+    'user_address' => $final_user['user_address'] ?? ''
 ];
 // 為了相容原本的寫法，也存一份獨立的 user_id
-$_SESSION['user_id'] = $final_user['user_id'];
+$_SESSION['user_id']      = $final_user['user_id'];
+$_SESSION['user_name']    = $final_user['user_name'];
+$_SESSION['user_phone']   = $final_user['user_phone'] ?? '';
+$_SESSION['user_address'] = $final_user['user_address'] ?? '';
 
 echo json_encode([
     'status' => 'success',
@@ -119,6 +124,8 @@ echo json_encode([
         'id'    => $final_user['user_id'], // 前端 Pinia 用 id
         'name'  => $final_user['user_name'],
         'email' => $final_user['user_email'],
-        'image' => $final_user['user_url']
+        'image' => $final_user['user_url'],
+        'user_phone'   => $final_user['user_phone'] ?? '',
+        'user_address' => $final_user['user_address'] ?? ''
     ]
 ]);

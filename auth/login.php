@@ -36,7 +36,7 @@ $email = $input['email'] ?? '';
 $password = $input['password'] ?? '';
 try {
     // 查詢使用者
-    $sql = "SELECT user_id, user_name, user_password, user_url FROM users WHERE user_email = ?";
+    $sql = "SELECT user_id, user_name, user_email, user_phone, user_address, user_password, user_url FROM users WHERE user_email = ?";
     $stmt = $pdo->prepare($sql);
     $stmt->execute([$email]);
     $user = $stmt->fetch();
@@ -51,9 +51,12 @@ try {
                 "status" => "success",
                 "message" => "登入成功",
                 "user" => [
-                    "id" => $user['user_id'],
-                    "name" => $user['user_name'],
-                    "image" => $user['user_url']
+                    "user_id"      => $user['user_id'],      // 使用 user_id 與 Pinia 對接
+                    "user_name"    => $user['user_name'],    // 會員姓名
+                    "user_email"   => $user['user_email'],   // 電子信箱
+                    "user_phone"   => $user['user_phone'],   // 會員電話
+                    "user_address" => $user['user_address'], // 會員地址
+                    "user_url"     => $user['user_url']      // 會員頭像
                 ]
             ]);
             // 將 exit 放在最後確保輸出後停止
