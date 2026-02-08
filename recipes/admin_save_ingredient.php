@@ -43,7 +43,7 @@ try {
         $projectRoot = dirname(__DIR__); 
         
         // 設定資料夾結構
-        $folderPath = "/img/ingredients/$main_cat/$sub_cat/";
+        $folderPath = "/img/ingredients/$main_cat/";
         
         // 組合實體路徑 (給 move_uploaded_file 用)
         $uploadBase = $projectRoot . $folderPath; 
@@ -102,7 +102,7 @@ try {
         $msg = "新增成功";
     }
 
-    echo json_encode(['status' => 'success', 'message' => $msg]);
+    echo json_encode(['status' => 'success', 'message' => $msg,'debug_path' => $uploadBase]);
 
 } catch (Exception $e) {
     echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
