@@ -42,6 +42,7 @@ try {
                 p.recipe_title as parent_recipe_title,
                 u.user_name as author_name,
                 u.user_id as author_id,
+                u.user_email,
                 u.user_url as author_image
             FROM recipes r
             LEFT JOIN recipes p ON r.parent_recipe_id = p.recipe_id 
@@ -97,6 +98,7 @@ try {
     $sqlAdaptations = "SELECT 
                         r.*, 
                         u.user_name as author_name,
+                        u.user_email,
                         u.user_url as author_image
                     FROM recipes r
                     LEFT JOIN users u ON r.author_id = u.user_id 
