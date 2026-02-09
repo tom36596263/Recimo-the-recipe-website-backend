@@ -1,4 +1,6 @@
 <?php
+// 檔案位置：recipe_comments.php
+
 require_once '../config/cors.php';
 require_once '../config/db_config.php';
 
@@ -17,15 +19,17 @@ try {
                 exit;
             }
 
-            // 🏆 修正：加入 rc.status = 0，過濾掉被管理員下架 (status=1) 的留言
-            $sql = 'SELECT 
-                rc.*, 
-                u.user_name AS userName, 
-                u.user_url as user_avatar 
-                FROM recipe_comments rc
-                LEFT JOIN users u ON rc.user_id = u.user_id 
-                WHERE rc.recipe_id = ? AND rc.status = 0 
-                ORDER BY rc.comment_at DESC';
+            // 🏆 這次不改原本的 rc.* 欄位名，只外加抓取 handle
+$sql = 'SELECT 
+            rc.*, 
+            u.user_name AS userName, 
+            u.user_email AS handle,  -- 確保這裡抓的是 user_email
+            u.user_url as user_avatar 
+        FROM recipe_comments rc
+        LEFT JOIN users u ON rc.user_id = u.user_id 
+        WHERE rc.recipe_id = ? 
+          AND rc.is_display = 1 
+        ORDER BY rc.comment_at DESC';
             
             $stmt = $pdo->prepare($sql);
             $stmt->execute([$recipe_id]);
@@ -59,10 +63,9 @@ try {
 
                 if (!$recipe_id || !$user_id || !$content) throw new Exception('欄位不得為空');
 
-                // 🏆 修正：新增留言時，明確指定 status = 0 (正常顯示)
-                // 原本的 is_display 保留（如果資料庫有此欄位），但主要是對應你現在的 status 機制
-                $sql = 'INSERT INTO recipe_comments (recipe_id, user_id, comment_text, comment_at, status, is_display, like_count) 
-                        VALUES (?, ?, ?, NOW(), 0, 1, 0)';
+                // 恢復你原本的 Insert 邏輯
+                $sql = 'INSERT INTO recipe_comments (recipe_id, user_id, comment_text, comment_at, is_display, like_count) 
+                        VALUES (?, ?, ?, NOW(), 1, 0)';
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute([$recipe_id, $user_id, $content]);
                 echo json_encode(['success' => true, 'message' => '新增成功']);

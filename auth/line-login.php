@@ -3,6 +3,7 @@
 // 第一步：引入 CORS 權限設定 (必須放在程式碼最上方)
 // ---------------------------------------------------------
 require_once '../config/cors.php';
+session_start();
 
 // ---------------------------------------------------------
 // 第二步：引入資料庫連線設定
@@ -101,15 +102,17 @@ try {
     $user = $stmt->fetch();
 
     if ($user) {
-        // --- 已有帳號：直接取資料庫內容 ---
+        // 已有帳號：直接取資料庫內容
         $resUser = [
             'id'     => $user['user_id'],
             'name'   => $user['user_name'],
             'email'  => $user['user_email'],
-            'avatar' => $user['user_url']
+            'avatar' => $user['user_url'],
+            'user_phone'=> $user['user_phone'],
+            'user_address' => $user['user_address']
         ];
     } else {
-        // --- 沒有帳號：自動註冊 ---
+        // 沒有帳號：自動註冊
         // 優先使用 LINE 可能提供的 Email，若無則用 ID 拼湊
         $userEmail = $profile['email'] ?? ($lineUserId . "@line.com");
         $dummyPassword = password_hash(uniqid(), PASSWORD_DEFAULT);
@@ -129,9 +132,24 @@ try {
             'id'     => $newId,
             'name'   => $displayName,
             'email'  => $userEmail,
-            'avatar' => $pictureUrl
+            'avatar' => $pictureUrl,
+            'user_phone'   => '', // 新用戶預設為空
+            'user_address' => ''  // 新用戶預設為空
         ];
     }
+
+    // 登入成功，寫入伺服器 Session
+    // 先清空舊的登入資訊，避免 33 號與 35 號混淆
+    session_unset(); 
+    
+    // 寫入目前的正確身分
+    $_SESSION['user_id']      = $resUser['id'];
+    $_SESSION['user_name']    = $resUser['name'];
+    $_SESSION['user_email']   = $resUser['email'];
+    // 存入更多資訊，例如 $_SESSION['login_type'] = 'line';
+    // Session 也同步存入，確保 update_user_self.php 比對時不會出錯
+    $_SESSION['user_phone']   = $resUser['user_phone'] ?? '';
+    $_SESSION['user_address'] = $resUser['user_address'] ?? '';
 
     // 統一回傳格式
     echo json_encode([
