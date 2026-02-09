@@ -36,7 +36,7 @@ try {
 
     $result = [];
 
-    // --- 1. 取得主食譜資訊 (🏆 修正：加入 r.status = 0) ---
+    // --- 1. 取得主食譜資訊 ---
     $sqlMain = "SELECT 
                 r.*, 
                 p.recipe_title as parent_recipe_title,
@@ -54,10 +54,17 @@ try {
     $main = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$main) {
-        // 如果食譜 status 不為 0，會直接進到這裡
         echo json_encode(['success' => false, 'message' => '找不到該食譜或該食譜已被下架']);
         exit;
     }
+
+    // 🏆 封裝主食譜作者資訊，對接前端 AuthorInfo
+    $main['author'] = [
+        'author_id'    => $main['author_id'],
+        'author_name'  => $main['author_name'],
+        'author_image' => $main['author_image'],
+        'user_email'   => $main['user_email']
+    ];
     $result['main'] = $main;
 
     // --- 2. 取得主食譜食材 ---
@@ -94,10 +101,11 @@ try {
     // --- 4. 取得主食譜標籤 ---
     $result['tags'] = getRecipeTags($pdo, $recipe_id);
 
-    // --- 4.5 核心修正：取得改編版本 (🏆 修正：加入 r.status = 0) ---
+    // --- 4.5 核心修正：取得改編版本 ---
     $sqlAdaptations = "SELECT 
                         r.*, 
                         u.user_name as author_name,
+                        u.user_id as author_id,
                         u.user_email,
                         u.user_url as author_image
                     FROM recipes r
@@ -108,6 +116,14 @@ try {
     $adaptations = $stmtAdapt->fetchAll(PDO::FETCH_ASSOC);
 
     foreach ($adaptations as &$child) {
+        // 🏆 封裝改編版作者資訊，解決小卡片沒照片的問題
+        $child['author'] = [
+            'author_id'    => $child['author_id'],
+            'author_name'  => $child['author_name'],
+            'author_image' => $child['author_image'],
+            'user_email'   => $child['user_email']
+        ];
+
         $child_id = $child['recipe_id'];
 
         // A. 抓取該改編版本的食材
@@ -123,7 +139,7 @@ try {
                 FROM recipe_ingredients ri
                 JOIN ingredients i ON ri.ingredient_id = i.ingredient_id
                 WHERE ri.recipe_id = ?";
-        $stmtChildIng = $pdo->prepare($sqlChildChildIng ?? $sqlChildIng); // 修正變數參考
+        $stmtChildIng = $pdo->prepare($sqlChildIng); // 修正變數誤寫
         $stmtChildIng->execute([$child_id]);
         $child['ingredients'] = $stmtChildIng->fetchAll(PDO::FETCH_ASSOC);
 
