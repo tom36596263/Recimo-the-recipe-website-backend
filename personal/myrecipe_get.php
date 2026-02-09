@@ -30,6 +30,9 @@ try {
 
     // 查詢每道食譜的食材（含數量、單位、備註等）
     foreach ($recipes as &$recipe) {
+        // 設定 user_url 預設值
+        $recipe['user_url'] = $recipe['user_url'] ?: 'img/site/None_avatar.svg';
+        
         $recipe_id = $recipe['recipe_id'];
         $sql_ing = 'SELECT DISTINCT
             ri.ingredient_id,
