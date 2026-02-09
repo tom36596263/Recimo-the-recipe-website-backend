@@ -19,17 +19,17 @@ try {
                 exit;
             }
 
-            // 🏆 這次不改原本的 rc.* 欄位名，只外加抓取 handle
-$sql = 'SELECT 
-            rc.*, 
-            u.user_name AS userName, 
-            u.user_email AS handle,  -- 確保這裡抓的是 user_email
-            u.user_url as user_avatar 
-        FROM recipe_comments rc
-        LEFT JOIN users u ON rc.user_id = u.user_id 
-        WHERE rc.recipe_id = ? 
-          AND rc.is_display = 1 
-        ORDER BY rc.comment_at DESC';
+            // 🏆 修正處：將 is_display = 1 改為 status = 0
+            $sql = 'SELECT 
+                        rc.*, 
+                        u.user_name AS userName, 
+                        u.user_email AS handle, 
+                        u.user_url as user_avatar 
+                    FROM recipe_comments rc
+                    LEFT JOIN users u ON rc.user_id = u.user_id 
+                    WHERE rc.recipe_id = ? 
+                      AND rc.status = 0 
+                    ORDER BY rc.comment_at DESC';
             
             $stmt = $pdo->prepare($sql);
             $stmt->execute([$recipe_id]);
@@ -63,9 +63,9 @@ $sql = 'SELECT
 
                 if (!$recipe_id || !$user_id || !$content) throw new Exception('欄位不得為空');
 
-                // 恢復你原本的 Insert 邏輯
-                $sql = 'INSERT INTO recipe_comments (recipe_id, user_id, comment_text, comment_at, is_display, like_count) 
-                        VALUES (?, ?, ?, NOW(), 1, 0)';
+                // 🏆 修正處：新增留言時，status 設為 0 (代表預設上架)
+                $sql = 'INSERT INTO recipe_comments (recipe_id, user_id, comment_text, comment_at, status, like_count) 
+                        VALUES (?, ?, ?, NOW(), 0, 0)';
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute([$recipe_id, $user_id, $content]);
                 echo json_encode(['success' => true, 'message' => '新增成功']);
