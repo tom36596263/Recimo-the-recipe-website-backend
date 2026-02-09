@@ -46,7 +46,7 @@ try {
 		if (count($recipe_ids) > 0) {
 			// 查詢食譜詳細（含作者資訊）
 			$in = str_repeat('?,', count($recipe_ids) - 1) . '?';
-			$sql = "SELECT r.*, u.user_name, u.user_url FROM recipes r LEFT JOIN users u ON r.author_id = u.user_id WHERE r.recipe_id IN ($in)";
+			$sql = "SELECT r.*, u.user_name, COALESCE(u.user_url, 'img/site/None_avatar.svg') AS user_url FROM recipes r LEFT JOIN users u ON r.author_id = u.user_id WHERE r.recipe_id IN ($in)";
 			$stmt2 = $pdo->prepare($sql);
 			foreach ($recipe_ids as $k => $id) {
 				$stmt2->bindValue($k + 1, $id, PDO::PARAM_INT);

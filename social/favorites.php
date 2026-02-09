@@ -91,7 +91,7 @@ if ($method === 'GET' && isset($_GET['user_id'])) {
 		}
 	}
 	$sql = "SELECT f.favorite_id, f.recipe_id, f.folder_id, f.like_at,
-				   r.*, u.user_name, u.user_url
+			   r.*, u.user_name, COALESCE(u.user_url, 'img/site/None_avatar.svg') AS user_url
 			FROM favorites f
 			JOIN recipes r ON f.recipe_id = r.recipe_id
 			LEFT JOIN users u ON r.author_id = u.user_id
