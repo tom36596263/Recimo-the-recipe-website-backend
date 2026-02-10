@@ -4,6 +4,8 @@ require_once '../config/db_config.php';
 require_once 'recipe_base_sql.php';      // 拿 SELECT 模板
 require_once 'recipe_query_helper.php';  // 拿 WHERE 產生器
 
+header('Content-Type: application/json; charset=utf-8');
+
 $mode = $_GET['mode'] ?? 'public';
 
 // 1. 取得組合後的 SQL

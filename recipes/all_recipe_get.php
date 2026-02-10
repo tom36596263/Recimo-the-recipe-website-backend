@@ -2,7 +2,7 @@
 require_once '../config/cors.php';
 require_once '../config/db_config.php';
 require_once 'recipe_base_sql.php'; // 💡 引入第一個檔案定義的 $baseSelect
-
+header('Content-Type: application/json; charset=utf-8');
 $mode = $_GET['mode'] ?? 'public';
 
 // 1. 使用第一個檔案定義的強大 SQL 主體

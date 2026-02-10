@@ -2,6 +2,8 @@
 require_once '../config/cors.php';
 require_once '../config/db_config.php';
 
+header('Content-Type: application/json; charset=utf-8');
+
 $keyword = isset($_GET['keyword']) ? trim($_GET['keyword']) : '';
 try {
     $kwParam = "%$keyword%";
