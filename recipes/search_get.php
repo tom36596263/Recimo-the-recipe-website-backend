@@ -2,8 +2,6 @@
 require_once '../config/cors.php';
 require_once '../config/db_config.php';
 
-header('Content-Type: application/json; charset=utf-8');
-
 $keyword = isset($_GET['keyword']) ? trim($_GET['keyword']) : '';
 try {
     $kwParam = "%$keyword%";
@@ -30,7 +28,7 @@ try {
         LEFT JOIN recipe_tag rtr2 ON r2.recipe_id = rtr2.recipe_id
         LEFT JOIN tags t2 ON rtr2.tag_id = t2.tag_id
         LEFT JOIN products p2 ON r2.linked_product_id = p2.product_id
-        WHERE (r2.status = 0 AND r2.parent_recipe_id IS NULL)
+        WHERE r2.status = 0 AND r2.parent_recipe_id IS NULL
     ";
 
     if ($keyword !== '') {
