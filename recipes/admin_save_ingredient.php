@@ -43,17 +43,12 @@ try {
             $isLocal = (str_contains($_SERVER["HTTP_HOST"], "127.0.0.1") || str_contains($_SERVER["HTTP_HOST"], "localhost"));
         }
 
-        // 根據環境決定專案根目錄
-        if ($isLocal) {
-            // 本地端：recimo_api 就是根目錄
-            $projectRoot = dirname(__DIR__);
-        } else {
-            // 線上版：需要往上兩層（因為檔案在 g2/api/recipes/）
-            $projectRoot = dirname(dirname(__DIR__));
-        } 
+        // 統一存到 api/img/ 資料夾
+        // 本地端：recimo_api 就是 api 資料夾
+        // 線上版：api 資料夾在 g2/api/
+        $projectRoot = dirname(__DIR__);  // 都是往上 1 層到 api 根目錄
         
-        // 設定相對路徑 (不含根目錄，要存資料庫用的)
-        // 注意：這裡前面不加斜線，讓它變成相對路徑
+        // 設定相對路徑 (存資料庫用)
         $relativeFolder = "img/ingredients/$main_cat/";
         
         // 組合出「電腦/伺服器」看得懂的實體路徑
@@ -102,7 +97,7 @@ try {
 
     } else {
         // --- 新增 (INSERT) ---
-        if (!$imagePath) $imagePath = 'img/default.png'; // 沒傳圖就給預設圖
+        if (!$imagePath) $imagePath = 'img/ingredients/default.png'; // 沒傳圖就給預設圖
 
         $sql = "INSERT INTO ingredients 
                 (ingredient_name, main_category, sub_category, 

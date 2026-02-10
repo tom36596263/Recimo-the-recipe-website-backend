@@ -12,7 +12,7 @@ if (!isset($isLocal)) {
 //設定基礎網址 (注意：結尾【不要】加 img/，因為你資料庫已經有了)
 $urlPrefix = $isLocal 
     ? 'http://' . $_SERVER['HTTP_HOST'] . '/recimo_api/' // 本地端 API 根目錄
-    : 'https://tibamef2e.com/cjd102/g2/';         // 線上版 專案根目錄
+    : 'https://tibamef2e.com/cjd102/g2/api/';         // 線上版 專案根目錄
 
 try {
     $keyword = isset($_GET['keyword']) ? $_GET['keyword'] : '';

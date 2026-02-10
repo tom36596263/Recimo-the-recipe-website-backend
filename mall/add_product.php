@@ -26,10 +26,10 @@ $isLocal = (str_contains($_SERVER["HTTP_HOST"], "127.0.0.1") || str_contains($_S
 
 if ($isLocal) {
     // 本機開發環境
-    $upload_dir = __DIR__ . '/../img/mall/';
+    $upload_dir = __DIR__ . '..api/img/mall/';
 } else {
     // 伺服器部署環境 (使用絕對路徑)
-    $upload_dir = $_SERVER['DOCUMENT_ROOT'] . '/cjd102/g2/recimo/img/mall/';
+    $upload_dir = $_SERVER['DOCUMENT_ROOT'] . '/cjd102/g2/api/img/mall/';
 }
 
 // 檢查資料夾是否存在，不存在就建立
