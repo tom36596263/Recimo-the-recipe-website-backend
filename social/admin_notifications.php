@@ -127,12 +127,10 @@ function handlePost($pdo) {
     $type = isset($_POST['notification_type']) ? trim($_POST['notification_type']) : '';
     $content = isset($_POST['notification_content']) ? trim($_POST['notification_content']) : '';
     $link_url = isset($_POST['link_url']) ? trim($_POST['link_url']) : '';
-    
-    // 發布給全部會員時，receiver_id 設為 1（系統通知）
-    $receiver_id = 1;
+    $receiver_id_raw = isset($_POST['receiver_id']) ? $_POST['receiver_id'] : '';
     $sender_id = 1;
 
-    error_log("POST - title: $title, type: $type, content: $content");
+    error_log("POST - title: $title, type: $type, content: $content, receiver_id_raw: $receiver_id_raw");
 
     if (!$title || !$type || !$content) {
         http_response_code(400);
@@ -152,22 +150,92 @@ function handlePost($pdo) {
         return;
     }
 
-    $sql = "INSERT INTO notifications
-            (receiver_id, sender_id, notification_type, notification_title, notification_content, notification_photo_url, link_url, is_read, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 0, NOW())";
-
-    $stmt = $pdo->prepare($sql);
+    // 判斷 receiver_id 的類型
+    $isJson = false;
+    $receiverIds = [];
     
-    if ($stmt->execute([$receiver_id, $sender_id, $type, $title, $content, $photo_url, $link_url])) {
-        echo json_encode([
-            'success' => true,
-            'message' => '通知已發布',
-            'notification_id' => $pdo->lastInsertId(),
-            'photo_url' => $photo_url
-        ]);
+    // 如果是 JSON 字符串（特定用戶列表）
+    if (is_string($receiver_id_raw) && (strpos($receiver_id_raw, '[') === 0)) {
+        $decoded = json_decode($receiver_id_raw, true);
+        if (is_array($decoded) && !empty($decoded)) {
+            $isJson = true;
+            $receiverIds = array_map('intval', $decoded);
+        }
     } else {
-        http_response_code(500);
-        echo json_encode(['success' => false, 'message' => '發布通知失敗']);
+        $receiver_id = intval($receiver_id_raw);
+    }
+
+    // 批量發送處理（全部用戶或特定用戶列表）
+    if (($isJson && !empty($receiverIds)) || (!$isJson && $receiver_id === 0)) {
+        try {
+            // 如果是發給全部用戶，查詢所有用戶
+            if (!$isJson && $receiver_id === 0) {
+                $userSql = "SELECT user_id FROM users WHERE user_id != 1";
+                $userStmt = $pdo->query($userSql);
+                $receiverIds = $userStmt->fetchAll(PDO::FETCH_COLUMN);
+            }
+
+            if (empty($receiverIds)) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => '沒有可發送的用戶']);
+                return;
+            }
+
+            // 開始事務
+            $pdo->beginTransaction();
+
+            // 準備批量插入語句
+            $sql = "INSERT INTO notifications
+                    (receiver_id, sender_id, notification_type, notification_title, notification_content, notification_photo_url, link_url, is_read, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 0, NOW())";
+            $stmt = $pdo->prepare($sql);
+
+            // 為每個用戶插入一條通知
+            $insertedCount = 0;
+            foreach ($receiverIds as $userId) {
+                if ($stmt->execute([$userId, $sender_id, $type, $title, $content, $photo_url, $link_url])) {
+                    $insertedCount++;
+                }
+            }
+
+            // 提交事務
+            $pdo->commit();
+
+            echo json_encode([
+                'success' => true,
+                'message' => "通知已發布給 {$insertedCount} 位用戶",
+                'inserted_count' => $insertedCount,
+                'photo_url' => $photo_url
+            ]);
+
+        } catch (Exception $e) {
+            // 回滾事務
+            $pdo->rollBack();
+            http_response_code(500);
+            echo json_encode([
+                'success' => false,
+                'message' => '批量發送失敗: ' . $e->getMessage()
+            ]);
+        }
+    } else {
+        // 發給特定單一用戶
+        $sql = "INSERT INTO notifications
+                (receiver_id, sender_id, notification_type, notification_title, notification_content, notification_photo_url, link_url, is_read, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 0, NOW())";
+
+        $stmt = $pdo->prepare($sql);
+        
+        if ($stmt->execute([$receiver_id, $sender_id, $type, $title, $content, $photo_url, $link_url])) {
+            echo json_encode([
+                'success' => true,
+                'message' => '通知已發布',
+                'notification_id' => $pdo->lastInsertId(),
+                'photo_url' => $photo_url
+            ]);
+        } else {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'message' => '發布通知失敗']);
+        }
     }
 }
 
@@ -251,6 +319,8 @@ function handlePut($pdo) {
 function handleDelete($pdo) {
     $input = json_decode(file_get_contents('php://input'), true);
     $notification_id = isset($input['notification_id']) ? intval($input['notification_id']) : 0;
+    $title = isset($input['title']) ? $input['title'] : '';
+    $created_at = isset($input['created_at']) ? $input['created_at'] : '';
 
     if (!$notification_id) {
         http_response_code(400);
@@ -258,13 +328,52 @@ function handleDelete($pdo) {
         return;
     }
 
-    $sql = "DELETE FROM notifications WHERE notification_id = ? AND sender_id = 1";
-    $stmt = $pdo->prepare($sql);
-
-    if ($stmt->execute([$notification_id])) {
-        echo json_encode(['success' => true, 'message' => '通知已刪除']);
+    // 如果有標題，刪除所有相同標題、內容、類型、日期的記錄（視為批次）
+    if ($title && $created_at) {
+        // 先獲取該通知的完整信息
+        $infoSql = "SELECT notification_content, notification_type, notification_photo_url 
+                    FROM notifications WHERE notification_id = ?";
+        $infoStmt = $pdo->prepare($infoSql);
+        $infoStmt->execute([$notification_id]);
+        $info = $infoStmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($info) {
+            // 根據標題+內容+類型+圖片+同一天刪除同批次
+            $sql = "DELETE FROM notifications 
+                    WHERE sender_id = 1 
+                    AND notification_title = ?
+                    AND notification_content = ?
+                    AND notification_type = ?
+                    AND notification_photo_url <=> ?
+                    AND DATE(created_at) = DATE(?)";
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([
+                $title, 
+                $info['notification_content'],
+                $info['notification_type'],
+                $info['notification_photo_url'],
+                $created_at
+            ]);
+            $deletedCount = $stmt->rowCount();
+            echo json_encode([
+                'success' => true, 
+                'message' => $deletedCount > 1 ? "已刪除 {$deletedCount} 條通知" : '刪除成功',
+                'deleted_count' => $deletedCount
+            ]);
+        } else {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'message' => '找不到通知資訊']);
+        }
     } else {
-        http_response_code(500);
-        echo json_encode(['success' => false, 'message' => '刪除通知失敗']);
+        // 單條刪除
+        $sql = "DELETE FROM notifications WHERE notification_id = ? AND sender_id = 1";
+        $stmt = $pdo->prepare($sql);
+
+        if ($stmt->execute([$notification_id])) {
+            echo json_encode(['success' => true, 'message' => '通知已刪除']);
+        } else {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'message' => '刪除通知失敗']);
+        }
     }
 }
