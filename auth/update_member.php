@@ -59,7 +59,7 @@ try {
 $target_url = $_POST['user_url'] ?? ''; // 預設沿用舊的
 
 if (!empty($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
-    $uploadDir = '../img/profile/';
+    $uploadDir = '..api/img/profile/';
     if (!is_dir($uploadDir)) {
         mkdir($uploadDir, 0777, true);
     }
