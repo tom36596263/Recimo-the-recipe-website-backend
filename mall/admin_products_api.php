@@ -221,7 +221,7 @@ else if ($method === 'POST' && $action === 'update') {
                         $finalImages[] = [
                             'id' => count($finalImages) + 1,
                             'is_cover' => (count($finalImages) === 0), 
-                            'image_url' => "img/mall/" . $newFileName
+                            'image_url' => "api/img/mall/" . $newFileName
                         ];
                     }
                 }
