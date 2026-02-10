@@ -16,7 +16,7 @@ if (!isset($isLocal)) {
 
 $imgBaseUrl = $isLocal
     ? 'http://' . $_SERVER['HTTP_HOST'] . '/recimo_api/img/mall/'
-    : 'https://tibamef2e.com/cjd102/g2/recimo/img/mall/';
+    : 'https://tibamef2e.com/cjd102/g2/api/img/mall/';
 
 
 
@@ -171,7 +171,7 @@ else if ($method === 'POST' && $action === 'update') {
         } else {
             // 伺服器部署環境 (tibamef2e) - 使用絕對路徑
             // $_SERVER['DOCUMENT_ROOT'] 會抓到伺服器的根目錄
-            $uploadDir = $_SERVER['DOCUMENT_ROOT'] . '/cjd102/g2/recimo/img/mall/';
+            $uploadDir = $_SERVER['DOCUMENT_ROOT'] . '/cjd102/g2/api/img/mall/';
         }
 
         // 檢查資料夾是否存在，不存在就建立 (預防措施)
@@ -221,7 +221,7 @@ else if ($method === 'POST' && $action === 'update') {
                         $finalImages[] = [
                             'id' => count($finalImages) + 1,
                             'is_cover' => (count($finalImages) === 0), 
-                            'image_url' => "img/mall/" . $newFileName
+                            'image_url' => "api/img/mall/" . $newFileName
                         ];
                     }
                 }
