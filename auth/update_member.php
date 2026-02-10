@@ -41,11 +41,13 @@ if ($admin_level < 2) {
 }
 
 // debug用
-// file_put_contents(
-//     __DIR__ . '/debug.log',
-//     print_r($_POST, true) . print_r($_FILES, true),
-//     FILE_APPEND
-// );
+file_put_contents(
+    __DIR__ . '/debug_log.txt',
+    "Time: " . date('Y-m-d H:i:s') . "\n" .
+        "FILES: " . print_r($_FILES, true) . "\n" .
+        "Target Path: " . $targetPath . "\n",
+    FILE_APPEND
+);
 
 try {
     // 確保 ID 是純數字且去掉可能的多餘空白
@@ -56,20 +58,24 @@ try {
         exit;
     }
 
-$target_url = $_POST['user_url'] ?? ''; // 預設沿用舊的
+    $target_url = $_POST['user_url'] ?? ''; // 預設沿用舊的
 
-if (!empty($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
-    $uploadDir = '..api/img/profile/';
+    if (!empty($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
+    // 從 api/auth/ 往上一層到 api/，再進入 img/profile/
+    $uploadDir = __DIR__ . '/../img/profile/'; 
+    
     if (!is_dir($uploadDir)) {
+        // 如果資料夾不存在就建立它 (這裡會建立在 api/img/profile/)
         mkdir($uploadDir, 0777, true);
     }
 
     $ext = pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION);
-    $fileName = 'user_id=' .$user_id . '_avatar' . '_' . time() . '.' . $ext;
+    $fileName = 'user_' . $user_id . '_avatar_' . time() . '.' . $ext;
     $targetPath = $uploadDir . $fileName;
 
     if (move_uploaded_file($_FILES['image']['tmp_name'], $targetPath)) {
-        // 存「對外路徑」，不是實體路徑
+        // 存入資料庫的路徑 (這部分維持不變)
+        // 因為對前端來說，它是從 api/ 開始抓，所以存 img/profile/filename 是對的
         $target_url = 'img/profile/' . $fileName;
     }
 }
