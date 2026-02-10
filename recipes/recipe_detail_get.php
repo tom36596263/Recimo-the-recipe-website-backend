@@ -1,5 +1,5 @@
 <?php
-// 檔案位置：C:\MAMP\htdocs\recimo_api\recipes\recipe_tags_get.php
+// 檔案位置：C:\MAMP\htdocs\recimo_api\recipes\recipe_detail_get.php
 
 require_once '../config/cors.php';
 require_once '../config/db_config.php';
@@ -45,6 +45,7 @@ try {
 
     $sqlMain = "SELECT 
                 r.*, 
+                r.recipe_servings,
                 p.recipe_title as parent_recipe_title,
                 u.user_name as author_name,
                 u.user_id as author_id,
