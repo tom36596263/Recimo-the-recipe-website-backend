@@ -49,7 +49,7 @@ try {
             $projectRoot = dirname(__DIR__);
         } else {
             // 線上版：需要往上兩層（因為檔案在 g2/api/recipes/）
-            $projectRoot = dirname(__DIR__);
+            $projectRoot = dirname(dirname(__DIR__));
         } 
         
         // 設定相對路徑 (不含根目錄，要存資料庫用的)
