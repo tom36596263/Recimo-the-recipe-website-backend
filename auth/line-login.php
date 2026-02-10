@@ -120,10 +120,10 @@ try {
     if ($user) {
         // 已有帳號：登入
         $resUser = [
-            'id'           => $user['user_id'],
-            'name'         => $user['user_name'],
-            'email'        => $user['user_email'],
-            'avatar'       => $user['user_url'],
+            'user_id'      => $user['user_id'],      // 改為 user_id
+            'user_name'    => $user['user_name'],    // 建議對應資料庫命名
+            'user_email'   => $user['user_email'],
+            'user_url'     => $user['user_url'],     // 建議與 Google 登入回傳名稱一致
             'user_phone'   => $user['user_phone'],
             'user_address' => $user['user_address']
         ];
@@ -144,20 +144,20 @@ try {
 
         $newId = $pdo->lastInsertId();
         $resUser = [
-            'id'           => $newId,
-            'name'         => $displayName,
-            'email'        => $userEmail,
-            'avatar'       => $pictureUrl,
+            'user_id'      => $newId,                // 改為 user_id
+            'user_name'    => $displayName,
+            'user_email'   => $userEmail,
+            'user_url'     => $pictureUrl,
             'user_phone'   => '',
             'user_address' => ''
         ];
     }
 
-    // 寫入 Session
+    // 寫入 Session (保持原樣或同步更新)
     session_unset(); 
-    $_SESSION['user_id']      = $resUser['id'];
-    $_SESSION['user_name']    = $resUser['name'];
-    $_SESSION['user_email']   = $resUser['email'];
+    $_SESSION['user_id']      = $resUser['user_id'];
+    $_SESSION['user_name']    = $resUser['user_name'];
+    $_SESSION['user_email']   = $resUser['user_email'];
     $_SESSION['user_phone']   = $resUser['user_phone'] ?? '';
     $_SESSION['user_address'] = $resUser['user_address'] ?? '';
 

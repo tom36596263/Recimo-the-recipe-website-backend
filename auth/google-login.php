@@ -121,10 +121,10 @@ $_SESSION['user_address'] = $final_user['user_address'] ?? '';
 echo json_encode([
     'status' => 'success',
     'user' => [
-        'id'    => $final_user['user_id'], // 前端 Pinia 用 id
-        'name'  => $final_user['user_name'],
-        'email' => $final_user['user_email'],
-        'image' => $final_user['user_url'],
+        'user_id' => $final_user['user_id'], // 改成 user_id
+        'user_name' => $final_user['user_name'], // 建議與後端欄位一致
+        'user_email' => $final_user['user_email'],
+        'user_url' => $final_user['user_url'],
         'user_phone'   => $final_user['user_phone'] ?? '',
         'user_address' => $final_user['user_address'] ?? ''
     ]
