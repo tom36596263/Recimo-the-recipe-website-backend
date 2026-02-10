@@ -46,7 +46,7 @@ function saveBase64Image($base64Data, $recipeId, $fileName) {
     if (!is_dir($dir)) mkdir($dir, 0777, true);
     $filePath = $dir . "/" . $fileName . ".png";
     file_put_contents($filePath, $data);
-    return "img/recipes/" . $recipeId . "/" . $fileName . ".png";
+    return "/img/recipes/" . $recipeId . "/" . $fileName . ".png";
 }
 error_log("DEBUG - 食材資料: " . json_encode($input['ingredients']));
 error_log("DEBUG - 步驟資料: " . json_encode($input['steps']));
