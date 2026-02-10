@@ -38,44 +38,43 @@ function formatDbTime($timeInput) {
 }
 
 /**
- * 圖片儲存：統一存向 img/recipes 夾，並具備自動去網址邏輯
+ * 圖片儲存修正版：解決更換失敗與快取問題
  */
 function saveBase64Image($base64Data, $recipeId, $fileName, $subDir = "") {
     if (empty($base64Data)) return null;
 
-    // 🏆 編輯保護邏輯：如果資料已經是完整網址，代表「沒換新圖」，直接去頭回傳路徑
-    if (strpos($base64Data, 'http') === 0) {
+    // A. 如果是 http 開頭且「不含」base64 字串，代表沒換新圖，回傳原路徑
+    if (strpos($base64Data, 'http') === 0 && strpos($base64Data, 'base64') === false) {
         $pos = strpos($base64Data, 'img/');
-        if ($pos !== false) {
-            return substr($base64Data, $pos);
-        }
-        return $base64Data;
+        return ($pos !== false) ? substr($base64Data, $pos) : $base64Data;
     }
 
-    if (!preg_match('/^data:image\/(\w+);base64,/', $base64Data, $type)) {
-        return $base64Data; 
+    // B. 提取並解碼 Base64
+    if (preg_match('/^data:image\/(\w+);base64,/', $base64Data, $type)) {
+        $data = base64_decode(substr($base64Data, strpos($base64Data, ',') + 1));
+    } else {
+        $data = base64_decode($base64Data, true);
     }
     
-    $data = base64_decode(substr($base64Data, strpos($base64Data, ',') + 1));
-    
-    // 組合目錄路徑 (相對路徑)
+    if (!$data) return $base64Data; // 解碼失敗則回傳原樣
+
+    // C. 準備目錄
     $baseDir = "../img/recipes/" . $recipeId;
     $targetDir = $subDir ? $baseDir . "/" . $subDir : $baseDir;
-    
-    // 遞迴建立目錄 (配合 FTP 777 權限)
     if (!is_dir($targetDir)) {
         mkdir($targetDir, 0777, true);
-        chmod($targetDir, 0777);
     }
     
-    $filePath = $targetDir . "/" . $fileName . ".png";
-    file_put_contents($filePath, $data);
+    // D. 檔名加入時間戳 (解決瀏覽器快取不更新問題)
+    $finalFileName = $fileName . "_" . time() . ".png";
+    $filePath = $targetDir . "/" . $finalFileName;
     
-    // 確保新檔案能被瀏覽器讀取
-    chmod($filePath, 0666);
+    if (file_put_contents($filePath, $data)) {
+        chmod($filePath, 0666);
+        return "img/recipes/" . $recipeId . "/" . ($subDir ? $subDir . "/" : "") . $finalFileName;
+    }
     
-    // 回傳資料庫儲存路徑
-    return "img/recipes/" . $recipeId . "/" . ($subDir ? $subDir . "/" : "") . $fileName . ".png";
+    return $base64Data;
 }
 
 try {
@@ -122,7 +121,7 @@ try {
         $input['author_id']
     ]);
 
-    // D. 更新食材 (先刪除後重新插入)
+    // D. 更新食材
     $pdo->prepare("DELETE FROM recipe_ingredients WHERE recipe_id = ?")->execute([$recipe_id]);
     if (!empty($input['ingredients'])) {
         $sqlIng = "INSERT INTO recipe_ingredients (recipe_id, ingredient_id, amount, unit_name, remark, is_modified) VALUES (?, ?, ?, ?, ?, ?)";
@@ -158,8 +157,7 @@ try {
         $stmtStepIng = $pdo->prepare($sqlStepIng);
 
         foreach ($input['steps'] as $index => $step) {
-            // 🏆 修正後的步驟圖片處理邏輯
-            $stepImg = saveBase64Image($step['step_image_url'] ?? '', $recipe_id, ($index + 1), "steps");
+            $stepImg = saveBase64Image($step['step_image_url'] ?? '', $recipe_id, "step_" . ($index + 1), "steps");
 
             $stmtStep->execute([
                 $recipe_id,
@@ -203,3 +201,4 @@ try {
     if ($pdo && $pdo->inTransaction()) $pdo->rollBack();
     echo json_encode(["success" => false, "message" => "更新失敗: " . $e->getMessage()]);
 }
+?>

@@ -36,17 +36,47 @@ function formatDbTime($timeInput) {
 /**
  * 圖片處理 (保持你原本的 Base64 邏輯)
  */
+/**
+ * 圖片處理：加入 uniqid() 解決瀏覽器快取問題
+ */
 function saveBase64Image($base64Data, $recipeId, $fileName) {
+    // 1. 基本判定：如果是空的或是已經是路徑，直接回傳
     if (empty($base64Data) || !preg_match('/^data:image\/(\w+);base64,/', $base64Data)) {
         return $base64Data; 
     }
-    $data = substr($base64Data, strpos($base64Data, ',') + 1);
-    $data = base64_decode($data);
-    $dir = "../img/recipes/" . $recipeId;
-    if (!is_dir($dir)) mkdir($dir, 0777, true);
-    $filePath = $dir . "/" . $fileName . ".png";
-    file_put_contents($filePath, $data);
-    return "/img/recipes/" . $recipeId . "/" . $fileName . ".png";
+
+    // 2. 解析資料
+    try {
+        $parts = explode(',', $base64Data);
+        if (count($parts) < 2) return $base64Data;
+        $data = base64_decode($parts[1]);
+        if (!$data) return $base64Data;
+
+        // 3. 確保路徑存在 (使用絕對路徑更保險)
+        // __DIR__ 會抓到目前 php 檔案所在目錄，確保路徑不會因為 MAMP 設定而跑掉
+        $dir = __DIR__ . "/../img/recipes/" . $recipeId;
+        if (!is_dir($dir)) {
+            mkdir($dir, 0777, true);
+            chmod($dir, 0777); // 強制給予最高權限
+        }
+
+        // 4. ✨ 產生新檔名 (加入 time() 確保不重複且解決快取)
+        $uniqueName = $fileName . "_" . time() . ".png";
+        $filePath = $dir . "/" . $uniqueName;
+        $dbPath = "/img/recipes/" . $recipeId . "/" . $uniqueName;
+
+        // 5. 寫入並確認結果
+        if (file_put_contents($filePath, $data)) {
+            chmod($filePath, 0666); // 確保檔案可讀寫
+            return $dbPath;
+        } else {
+            error_log("PHP Error: 檔案無法寫入 " . $filePath);
+            return $base64Data;
+        }
+    } catch (Exception $e) {
+        error_log("PHP Error: " . $e->getMessage());
+        return $base64Data;
+    }
 }
 error_log("DEBUG - 食材資料: " . json_encode($input['ingredients']));
 error_log("DEBUG - 步驟資料: " . json_encode($input['steps']));
@@ -175,48 +205,53 @@ try {
             ]);
         }
     }
-        // 6. 插入步驟 (修正點：必須先處理圖片與時間變數)
-    if (!empty($input['steps'])) {
-        $sqlStep = "INSERT INTO steps (recipe_id, step_order, step_title, step_content, step_image_url, step_total_time, is_modified) VALUES (?, ?, ?, ?, ?, ?, ?)";
-        $stmtStep = $pdo->prepare($sqlStep);
+      // 6. 插入步驟
+if (!empty($input['steps'])) {
+    $sqlStep = "INSERT INTO steps (recipe_id, step_order, step_title, step_content, step_image_url, step_total_time, is_modified) VALUES (?, ?, ?, ?, ?, ?, ?)";
+    $stmtStep = $pdo->prepare($sqlStep);
 
-        $sqlStepIng = "INSERT INTO step_ingredients (step_id, ingredient_id, step_ingredient_amount, unit_name) VALUES (?, ?, ?, ?)";
-        $stmtStepIng = $pdo->prepare($sqlStepIng);
+    $sqlStepIng = "INSERT INTO step_ingredients (step_id, ingredient_id, step_ingredient_amount, unit_name) VALUES (?, ?, ?, ?)";
+    $stmtStepIng = $pdo->prepare($sqlStepIng);
 
-        foreach ($input['steps'] as $index => $step) {
-                        // ✨ 修正：在這裡定義步驟專用的變數
-            $stepImgPath = saveBase64Image($step['image'] ?? '', $target_id, "step_" . ($index + 1));
-                $stepTime = formatDbTime($step['time'] ?? 0);
+    foreach ($input['steps'] as $index => $step) {
+        // --- ✨ 關鍵修正點 1: 處理圖片 ---
+        $rawImage = $step['image'] ?? '';
+        
+        // 如果是 Base64，儲存它並取得新路徑
+        // 如果是原本的路徑字串，這裏會直接回傳路徑
+        $stepImgPath = saveBase64Image($rawImage, $target_id, "step_" . ($index + 1));
+        
+        // --- ✨ 關鍵修正點 2: 強制處理時間格式 ---
+        $stepTime = formatDbTime($step['time'] ?? 0);
 
-            $stmtStep->execute([
-                $target_id,
-                $index + 1,
-                $step['title'] ?? '',
-                $step['content'] ?? '',
-                $stepImgPath,
-                $stepTime,
-                $step['is_modified'] ?? 0
-            ]);
+        $stmtStep->execute([
+            $target_id,
+            $index + 1,
+            $step['title'] ?? '',
+            $step['content'] ?? '',
+            $stepImgPath, // 確保這裡存入的是正確的路徑
+            $stepTime,
+            $step['is_modified'] ?? 0
+        ]);
 
-            $current_step_id = $pdo->lastInsertId();
+        $current_step_id = $pdo->lastInsertId();
 
-                            // 處理步驟食材關聯 (tags)
-            if (!empty($step['tags']) && is_array($step['tags'])) {
-                $uniqueTags = array_unique($step['tags']);
-                foreach ($uniqueTags as $ingId) {
-                    if (is_numeric($ingId)) {
-                            $stmtStepIng->execute([
-                            $current_step_id,
-                            (int)$ingId,
-                                0, // 步驟標籤通常不計量
-                            ''
-                        ]);
-
-                    }
+        // 處理步驟食材關聯 (tags)
+        if (!empty($step['tags']) && is_array($step['tags'])) {
+            $uniqueTags = array_unique($step['tags']);
+            foreach ($uniqueTags as $ingId) {
+                if (!empty($ingId)) {
+                    $stmtStepIng->execute([
+                        $current_step_id,
+                        (int)$ingId,
+                        0, 
+                        ''
+                    ]);
                 }
             }
         }
     }
+}
 
     // 7. 插入食譜標籤 (新增這段)
     if (isset($input['tags']) && is_array($input['tags'])) {
