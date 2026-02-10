@@ -1,18 +1,22 @@
 <?php
-die("我是正確的檔案！"); // 👈 加入這行測試
+// 1. 引入 CORS 設定
 require_once '../config/cors.php';
-require_once '../config/db_config.php';
+
+// 2. 加入禁止瀏覽器快取的 Header (解決您看不到更新欄位的問題)
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Cache-Control: post-check=0, pre-check=0", false);
+header("Pragma: no-cache");
 header('Content-Type: application/json');
 
+// 3. 連接資料庫
+require_once '../config/db_config.php';
+
 try {
-    // 查詢所有母食譜 (parent_recipe_id 為 NULL)
     $sql = "SELECT * FROM recipes WHERE parent_recipe_id IS NULL ORDER BY recipe_created_at DESC";
     $stmt = $pdo->query($sql);
     $recipes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // 格式化資料
     $formatted = array_map(function ($r) {
-        // 處理份數：確保有值且大於 0，否則預設為 1 (避免前端除以 0 壞掉)
         $servings = (isset($r['recipe_servings']) && (int)$r['recipe_servings'] > 0)
             ? (int)$r['recipe_servings']
             : 1;
@@ -21,11 +25,7 @@ try {
             "recipe_id" => (int)$r['recipe_id'],
             "recipe_title" => $r['recipe_title'],
             "recipe_image_url" => $r['recipe_image_url'],
-
-            // 🟢 關鍵新增：回傳份數
             "recipe_servings" => $servings,
-
-            // 營養素 (雖然欄位名寫 per_100g，但根據您的需求這可能是總熱量)
             "recipe_kcal_per_100g" => (float)$r['recipe_kcal_per_100g'],
             "recipe_protein_per_100g" => (float)$r['recipe_protein_per_100g'],
             "recipe_fat_per_100g" => (float)$r['recipe_fat_per_100g'],
