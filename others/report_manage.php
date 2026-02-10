@@ -3,6 +3,9 @@ require_once '../config/cors.php';
 require_once '../config/db_config.php';
 
 header("Content-Type: application/json; charset=UTF-8");
+// 🏆 修正 1：強制瀏覽器與伺服器不緩存 GET 結果
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Pragma: no-cache");
 
 if (!isset($pdo)) {
     echo json_encode(['success' => false, 'message' => 'Database connection failed.']);
@@ -11,8 +14,8 @@ if (!isset($pdo)) {
 
 $method = $_SERVER['REQUEST_METHOD'];
 
+// --- GET：獲取檢舉清單 ---
 if ($method === 'GET') {
-    // ... GET 部分保持不變 ...
     try {
         $content_col_name = 'NULL';
         $check_col = $pdo->query("DESCRIBE recipe_comments");
@@ -33,6 +36,7 @@ if ($method === 'GET') {
         ";
 
         $sql = "
+            /* 1. 留言檢舉 */
             SELECT 
                 CONCAT('comment_', rc.reported_comment_id) COLLATE utf8mb4_unicode_ci AS report_id, 
                 'comment' COLLATE utf8mb4_unicode_ci AS report_type, 
@@ -45,10 +49,14 @@ if ($method === 'GET') {
                 NULL AS report_img,
                 rc.comment_id AS target_id,
                 $content_col_name COLLATE utf8mb4_unicode_ci AS display_text,
-                '留言內容' COLLATE utf8mb4_unicode_ci AS display_title
+                '留言內容' COLLATE utf8mb4_unicode_ci AS display_title,
+                c.recipe_id AS recipe_id
             FROM reported_comments rc
             LEFT JOIN recipe_comments c ON rc.comment_id = c.comment_id
+
             UNION ALL
+
+            /* 2. 成品照檢舉 */
             SELECT 
                 CONCAT('gallery_', rg.reported_gallery_id) COLLATE utf8mb4_unicode_ci AS report_id, 
                 'gallery' COLLATE utf8mb4_unicode_ci AS report_type, 
@@ -61,10 +69,14 @@ if ($method === 'GET') {
                 gal.gallery_url COLLATE utf8mb4_unicode_ci AS report_img,
                 rg.gallery_id AS target_id,
                 gal.gallery_text COLLATE utf8mb4_unicode_ci AS display_text,
-                '成品照描述' COLLATE utf8mb4_unicode_ci AS display_title
+                '成品照描述' COLLATE utf8mb4_unicode_ci AS display_title,
+                gal.recipe_id AS recipe_id
             FROM reported_galleries rg
             LEFT JOIN recipe_gallery gal ON rg.gallery_id = gal.gallery_id
+
             UNION ALL
+
+            /* 3. 食譜檢舉 */
             SELECT 
                 CONCAT('recipe_', rr.reported_recipe_id) COLLATE utf8mb4_unicode_ci AS report_id, 
                 'recipe' COLLATE utf8mb4_unicode_ci AS report_type, 
@@ -77,9 +89,11 @@ if ($method === 'GET') {
                 r.recipe_image_url COLLATE utf8mb4_unicode_ci AS report_img,
                 rr.recipe_id AS target_id,
                 r.recipe_description COLLATE utf8mb4_unicode_ci AS display_text,
-                r.recipe_title COLLATE utf8mb4_unicode_ci AS display_title
+                r.recipe_title COLLATE utf8mb4_unicode_ci AS display_title,
+                rr.recipe_id AS recipe_id
             FROM reported_recipes rr
             LEFT JOIN recipes r ON rr.recipe_id = r.recipe_id
+            
             ORDER BY report_at DESC";
 
         $stmt = $pdo->query($sql);
@@ -88,58 +102,88 @@ if ($method === 'GET') {
     } catch (PDOException $e) {
         echo json_encode(['success' => false, 'message' => 'GET Error: ' . $e->getMessage()]);
     }
-} 
-else if ($method === 'POST') {
-    $input = json_decode(file_get_contents('php://input'), true);
-    $report_id_raw = $input['report_id'] ?? null;
-    $report_id = preg_replace('/^[a-z]+_/', '', $report_id_raw); 
-    $report_type = $input['report_type'] ?? null; 
-    $new_status = $input['status'] ?? null; 
-    $target_id = $input['target_id'] ?? null;
+}
 
-    if (!$report_id || !$report_type || !$new_status) {
-        echo json_encode(['success' => false, 'message' => 'Missing parameters.']);
-        exit;
-    }
-
-    $status_int = ($new_status === 'resolved') ? 1 : (($new_status === 'ignored') ? 2 : 0);
-
+// --- POST：處理審核操作 ---
+elseif ($method === 'POST') {
     try {
-        $pdo->beginTransaction();
+        $input = json_decode(file_get_contents("php://input"), true);
+        
+        $report_full_id = $input['report_id'] ?? null;
+        $report_type = $input['report_type'] ?? '';    
+        $target_id = $input['target_id'] ?? null;      
+        $new_status_text = $input['status'] ?? 'pending'; 
 
-        $table_map = [
-            'comment' => ['rep' => 'reported_comments', 'rep_pk' => 'reported_comment_id', 'cont' => 'recipe_comments', 'cont_pk' => 'comment_id'],
-            'gallery' => ['rep' => 'reported_galleries', 'rep_pk' => 'reported_gallery_id', 'cont' => 'recipe_gallery', 'cont_pk' => 'gallery_id'],
-            'recipe'  => ['rep' => 'reported_recipes', 'rep_pk' => 'reported_recipe_id', 'cont' => 'recipes', 'cont_pk' => 'recipe_id']
-        ];
-
-        if (!isset($table_map[$report_type])) { throw new Exception("Unsupported type"); }
-        $map = $table_map[$report_type];
-
-        // --- 1. 更新【原始內容表】 (先更新內容，因為它最容易出錯) ---
-        if ($target_id) {
-            $target_status = ($new_status === 'resolved') ? 1 : 0;
-            $sql_content = "UPDATE {$map['cont']} SET status = :t_status WHERE {$map['cont_pk']} = :target_id";
-            $stmt2 = $pdo->prepare($sql_content);
-            $stmt2->execute([':t_status' => $target_status, ':target_id' => $target_id]);
+        if (!$report_full_id || !$report_type || !$target_id) {
+            throw new Exception("Missing required parameters.");
         }
 
-        // --- 2. 更新【檢舉紀錄表】 ---
-        // 🏆 修正：檢查是否有 update_at 欄位防止更新失敗
-        $check_update_at = $pdo->query("DESCRIBE {$map['rep']}");
-        $rep_cols = $check_update_at->fetchAll(PDO::FETCH_COLUMN);
-        
-        $update_sql_part = in_array('update_at', $rep_cols) ? ", update_at = NOW()" : "";
-        
-        $sql_report = "UPDATE {$map['rep']} SET status = :status $update_sql_part WHERE {$map['rep_pk']} = :id";
+        $pure_report_id = preg_replace('/[^\d]/', '', $report_full_id);
+
+        $config_map = [
+            'recipe' => [
+                'report_table' => 'reported_recipes',
+                'report_pk' => 'reported_recipe_id',
+                'content_table' => 'recipes',
+                'content_pk' => 'recipe_id'
+            ],
+            'comment' => [
+                'report_table' => 'reported_comments',
+                'report_pk' => 'reported_comment_id',
+                'content_table' => 'recipe_comments',
+                'content_pk' => 'comment_id'
+            ],
+            'gallery' => [
+                'report_table' => 'reported_galleries',
+                'report_pk' => 'reported_gallery_id',
+                'content_table' => 'recipe_gallery',
+                'content_pk' => 'gallery_id'
+            ]
+        ];
+
+        if (!isset($config_map[$report_type])) {
+            throw new Exception("Invalid report type: " . $report_type);
+        }
+
+        $cfg = $config_map[$report_type];
+
+        $status_val = 0;
+        if ($new_status_text === 'resolved') $status_val = 1;
+        elseif ($new_status_text === 'ignored') $status_val = 2;
+
+        $pdo->beginTransaction();
+
+        // 1. 更新檢舉紀錄表
+        $sql_report = "UPDATE {$cfg['report_table']} 
+                       SET status = :status, update_at = NOW() 
+                       WHERE {$cfg['report_pk']} = :id";
         $stmt1 = $pdo->prepare($sql_report);
-        $stmt1->execute([':status' => $status_int, ':id' => $report_id]);
+        $stmt1->execute([':status' => $status_val, ':id' => $pure_report_id]);
+
+        // 2. 同步更新內容顯示狀態 (0=正常, 1=下架)
+        $target_display_status = ($new_status_text === 'resolved') ? 1 : 0;
+        
+        $sql_content = "UPDATE {$cfg['content_table']} 
+                        SET status = :t_status 
+                        WHERE {$cfg['content_pk']} = :t_id";
+        $stmt2 = $pdo->prepare($sql_content);
+        $stmt2->execute([':t_status' => $target_display_status, ':t_id' => $target_id]);
 
         $pdo->commit();
-        echo json_encode(['success' => true, 'message' => "成功更新為 $new_status"]);
+
+        // 🏆 修正 2：回傳影響行數，方便確認檢舉紀錄表是否真的有被更新
+        echo json_encode([
+            'success' => true, 
+            'report_updated' => $stmt1->rowCount(),
+            'content_updated' => $stmt2->rowCount(),
+            'message' => '狀態更新成功'
+        ]);
+
     } catch (Exception $e) {
-        if ($pdo->inTransaction()) { $pdo->rollBack(); }
-        echo json_encode(['success' => false, 'message' => '更新失敗：' . $e->getMessage()]);
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        echo json_encode(['success' => false, 'message' => 'POST Error: ' . $e->getMessage()]);
     }
+} else {
+    echo json_encode(['success' => false, 'message' => 'Method not allowed.']);
 }
 ?>

@@ -1,5 +1,5 @@
 <?php
-// 檔案位置：C:\MAMP\htdocs\recimo_api\recipes\recipe_tags_get.php
+// 檔案位置：C:\MAMP\htdocs\recimo_api\recipes\recipe_detail_get.php
 
 require_once '../config/cors.php';
 require_once '../config/db_config.php';
@@ -34,11 +34,18 @@ try {
         throw new Exception('缺少食譜 ID', 400);
     }
 
+    // 🏆 新增：判斷是否為管理員模式 (後台請求請帶上 &admin=1)
+    $is_admin = isset($_GET['admin']) && $_GET['admin'] === '1';
+
     $result = [];
 
-    // --- 1. 取得主食譜資訊 (🏆 修正：加入 r.status = 0) ---
+    // --- 1. 取得主食譜資訊 ---
+    // 🏆 修正：根據是否為管理員動態拼接 SQL 條件
+    $status_condition = $is_admin ? "" : " AND r.status = 0";
+
     $sqlMain = "SELECT 
                 r.*, 
+                r.recipe_servings,
                 p.recipe_title as parent_recipe_title,
                 u.user_name as author_name,
                 u.user_id as author_id,
@@ -47,17 +54,30 @@ try {
             FROM recipes r
             LEFT JOIN recipes p ON r.parent_recipe_id = p.recipe_id 
             LEFT JOIN users u ON r.author_id = u.user_id 
-            WHERE r.recipe_id = ? AND r.status = 0
+            WHERE r.recipe_id = ? $status_condition 
             LIMIT 1";
+            
     $stmt = $pdo->prepare($sqlMain);
     $stmt->execute([$recipe_id]);
     $main = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$main) {
-        // 如果食譜 status 不為 0，會直接進到這裡
-        echo json_encode(['success' => false, 'message' => '找不到該食譜或該食譜已被下架']);
+        $msg = $is_admin ? '找不到該食譜資料' : '找不到該食譜或該食譜已被下架';
+        echo json_encode(['success' => false, 'message' => $msg]);
         exit;
     }
+
+    // 🏆 封裝主食譜作者資訊，對接前端 AuthorInfo
+    $main['author'] = [
+        'author_id'    => $main['author_id'],
+        'author_name'  => $main['author_name'],
+        'author_image' => $main['author_image'],
+        'user_email'   => $main['user_email']
+    ];
+    
+    // 標註狀態供前端參考
+    $main['is_archived'] = ($main['status'] != 0);
+    
     $result['main'] = $main;
 
     // --- 2. 取得主食譜食材 ---
@@ -94,20 +114,31 @@ try {
     // --- 4. 取得主食譜標籤 ---
     $result['tags'] = getRecipeTags($pdo, $recipe_id);
 
-    // --- 4.5 核心修正：取得改編版本 (🏆 修正：加入 r.status = 0) ---
+    // --- 4.5 核心修正：取得改編版本 ---
+    // 🏆 修正：改編版也同步管理員邏輯
+    $child_status_condition = $is_admin ? "" : " AND r.status = 0";
     $sqlAdaptations = "SELECT 
                         r.*, 
                         u.user_name as author_name,
+                        u.user_id as author_id,
                         u.user_email,
                         u.user_url as author_image
                     FROM recipes r
                     LEFT JOIN users u ON r.author_id = u.user_id 
-                    WHERE r.parent_recipe_id = ? AND r.recipe_id != ? AND r.status = 0";
+                    WHERE r.parent_recipe_id = ? AND r.recipe_id != ? $child_status_condition";
+                    
     $stmtAdapt = $pdo->prepare($sqlAdaptations);
     $stmtAdapt->execute([$recipe_id, $recipe_id]);
     $adaptations = $stmtAdapt->fetchAll(PDO::FETCH_ASSOC);
 
     foreach ($adaptations as &$child) {
+        $child['author'] = [
+            'author_id'    => $child['author_id'],
+            'author_name'  => $child['author_name'],
+            'author_image' => $child['author_image'],
+            'user_email'   => $child['user_email']
+        ];
+
         $child_id = $child['recipe_id'];
 
         // A. 抓取該改編版本的食材
@@ -123,7 +154,7 @@ try {
                 FROM recipe_ingredients ri
                 JOIN ingredients i ON ri.ingredient_id = i.ingredient_id
                 WHERE ri.recipe_id = ?";
-        $stmtChildIng = $pdo->prepare($sqlChildChildIng ?? $sqlChildIng); // 修正變數參考
+        $stmtChildIng = $pdo->prepare($sqlChildIng); 
         $stmtChildIng->execute([$child_id]);
         $child['ingredients'] = $stmtChildIng->fetchAll(PDO::FETCH_ASSOC);
 

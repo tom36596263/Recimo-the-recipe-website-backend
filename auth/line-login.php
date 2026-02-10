@@ -24,22 +24,34 @@ if (!$code) {
     exit;
 }
 
-//  LINE Channel 資訊
+// LINE Channel 資訊 (請確保 db_config.php 或環境變數中有定義這些常數)
 $channelId = LINE_CHANNEL_ID;
 $channelSecret = LINE_CHANNEL_SECRET;
 
-// 動態取得 Redirect URI
-// 根據前端發送 API 請求的來源 (HTTP_ORIGIN) 自動組合 callback 網址
-// 例如從 http://localhost:5174 發來，這就會變成 http://localhost:5174/auth/callback
-$origin = $_SERVER['HTTP_ORIGIN'] ?? 'http://localhost:5173';
-$redirectUri = rtrim($origin, '/') . '/auth/callback';
+// ---------------------------------------------------------
+// 第四步：動態判定 Redirect URI (解決 400 Bad Request 關鍵)
+// ---------------------------------------------------------
+// 取得前端發送請求的來源 (例如 http://localhost:5173 或 https://tibamef2e.com)
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 
-// --- 步驟 A：用 code 換取 Access Token ---
+// 判斷是否為正式環境
+if (strpos($_SERVER['HTTP_HOST'], 'tibamef2e.com') !== false) {
+    // 正式環境：直接寫死，確保 100% 與 LINE Console 一致
+    // 檢查重點：s 是否有加、cjd102 是否小寫、最後有沒有斜線
+    $redirectUri = 'https://tibamef2e.com/cjd102/g2/recimo/';
+} else {
+    // 本地環境
+    $redirectUri = rtrim($origin, '/') . '/';
+}
+
+// ---------------------------------------------------------
+// 第五步：步驟 A - 用 code 換取 Access Token
+// ---------------------------------------------------------
 $tokenUrl = 'https://api.line.me/oauth2/v2.1/token';
 $postData = [
     'grant_type'    => 'authorization_code',
     'code'          => $code,
-    'redirect_uri'  => $redirectUri, // 這裡現在是動態的了
+    'redirect_uri'  => $redirectUri,
     'client_id'     => $channelId,
     'client_secret' => $channelSecret
 ];
@@ -49,11 +61,11 @@ curl_setopt($ch, CURLOPT_URL, $tokenUrl);
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_POST, true);
 curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
-curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); // 開發環境跳過 SSL
+curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); // 開發環境建議，正式環境若有證書可設為 true
 
 $result = curl_exec($ch);
 if (curl_errno($ch)) {
-    echo json_encode(['status' => 'error', 'message' => 'cURL 錯誤 (A): ' . curl_error($ch)]);
+    echo json_encode(['status' => 'error', 'message' => 'cURL 錯誤: ' . curl_error($ch)]);
     exit;
 }
 curl_close($ch);
@@ -65,14 +77,16 @@ if (!isset($tokenData['access_token'])) {
     echo json_encode([
         'status'  => 'error', 
         'message' => 'LINE 換取 Token 失敗', 
-        'detail'  => $tokenData, // 除錯
-        'sent_redirect_uri' => $redirectUri // 顯示後端當下使用的 URI
+        'detail'  => $tokenData, // 幫助偵錯
+        'debug_uri' => $redirectUri // 讓你知道後端現在是用哪個網址在驗證
     ]);
     exit;
 }
 $accessToken = $tokenData['access_token'];
 
-// --- 步驟 B：用 Access Token 換取使用者 Profile ---
+// ---------------------------------------------------------
+// 第六步：步驟 B - 用 Access Token 換取使用者 Profile
+// ---------------------------------------------------------
 $profileUrl = 'https://api.line.me/v2/profile';
 $ch = curl_init($profileUrl);
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -94,7 +108,9 @@ if (!$lineUserId) {
     exit;
 }
 
-// --- 步驟 C：資料庫邏輯 ---
+// ---------------------------------------------------------
+// 第七步：步驟 C - 資料庫邏輯
+// ---------------------------------------------------------
 try {
     // 檢查資料庫是否有此 LINE ID
     $stmt = $pdo->prepare("SELECT * FROM users WHERE line_id = ?");
@@ -102,18 +118,17 @@ try {
     $user = $stmt->fetch();
 
     if ($user) {
-        // 已有帳號：直接取資料庫內容
+        // 已有帳號：登入
         $resUser = [
-            'id'     => $user['user_id'],
-            'name'   => $user['user_name'],
-            'email'  => $user['user_email'],
-            'avatar' => $user['user_url'],
-            'user_phone'=> $user['user_phone'],
+            'id'           => $user['user_id'],
+            'name'         => $user['user_name'],
+            'email'        => $user['user_email'],
+            'avatar'       => $user['user_url'],
+            'user_phone'   => $user['user_phone'],
             'user_address' => $user['user_address']
         ];
     } else {
         // 沒有帳號：自動註冊
-        // 優先使用 LINE 可能提供的 Email，若無則用 ID 拼湊
         $userEmail = $profile['email'] ?? ($lineUserId . "@line.com");
         $dummyPassword = password_hash(uniqid(), PASSWORD_DEFAULT);
 
@@ -129,29 +144,24 @@ try {
 
         $newId = $pdo->lastInsertId();
         $resUser = [
-            'id'     => $newId,
-            'name'   => $displayName,
-            'email'  => $userEmail,
-            'avatar' => $pictureUrl,
-            'user_phone'   => '', // 新用戶預設為空
-            'user_address' => ''  // 新用戶預設為空
+            'id'           => $newId,
+            'name'         => $displayName,
+            'email'        => $userEmail,
+            'avatar'       => $pictureUrl,
+            'user_phone'   => '',
+            'user_address' => ''
         ];
     }
 
-    // 登入成功，寫入伺服器 Session
-    // 先清空舊的登入資訊，避免 33 號與 35 號混淆
+    // 寫入 Session
     session_unset(); 
-    
-    // 寫入目前的正確身分
     $_SESSION['user_id']      = $resUser['id'];
     $_SESSION['user_name']    = $resUser['name'];
     $_SESSION['user_email']   = $resUser['email'];
-    // 存入更多資訊，例如 $_SESSION['login_type'] = 'line';
-    // Session 也同步存入，確保 update_user_self.php 比對時不會出錯
     $_SESSION['user_phone']   = $resUser['user_phone'] ?? '';
     $_SESSION['user_address'] = $resUser['user_address'] ?? '';
 
-    // 統一回傳格式
+    // 回傳成功結果
     echo json_encode([
         'status' => 'success',
         'user'   => $resUser

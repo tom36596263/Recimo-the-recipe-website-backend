@@ -2,6 +2,7 @@
 require_once '../config/cors.php';
 
 require_once '../config/db_config.php';
+header('Content-Type: application/json; charset=utf-8');
 
 try {
     // 準備 SQL 查詢

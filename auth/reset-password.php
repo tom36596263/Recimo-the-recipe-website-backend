@@ -28,7 +28,8 @@ if (!isset($_SESSION['reset_verified_email']) || $_SESSION['reset_verified_email
     echo json_encode([
         'status' => 'error', 
         'message' => '非法請求，請重新進行驗證碼驗證',
-        // 'debug' => $_SESSION // 測試期留著，上線前刪除
+        // 'debug_session' => $_SESSION, // 方便檢查 Session 內容
+        // 'debug_input_email' => $email
     ]);
     exit;
 }
@@ -51,7 +52,7 @@ try {
             // 密碼雜湊後如果跟原本一模一樣，rowCount 有可能為 0
             echo json_encode(['status' => 'error', 'message' => '新密碼不可與舊密碼相同']);
         } else {
-            // 7. 成功後清空 Session 相關標記
+            // 成功後清空 Session 相關標記
             unset($_SESSION['reset_auth']);
             unset($_SESSION['reset_verified_email']);
             unset($_SESSION['reset_is_verified']);
