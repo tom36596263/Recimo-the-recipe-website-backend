@@ -143,17 +143,22 @@ try {
                 </div>
             ";
         $mail->send();
-
-        // 如果到這裡沒出錯，代表發信成功
         echo json_encode(['status' => 'success', 'message' => '驗證碼已發送']);
     } catch (Exception $e) {
-        // 方案 B：發信失敗（環境不支援）時，改用開發者模式回傳 code
-        echo json_encode([
-            'status' => 'success',
-            'message' => '【開發模式】驗證碼已生成',
-            'debug_code' => $code // 改回 debug_code，對齊前端
-        ]);
+        // 在進入開發模式回傳之前，確保 Session 已經更新
+        // 其實 $code 在 try 區塊之前就生成好了，所以這裡只需要確保 Session 有被寫入
+        $_SESSION['reset_auth'] = [
+            'email' => $email,
+            'code' => $code, // 確保這是最新生成的 $code
+            'expires_at' => $expires_at
+        ];
+
+            echo json_encode([
+                'status' => 'success',
+                'message' => '【開發模式】驗證碼已生成',
+                'debug_code' => $code 
+            ]);
+        }
+    } catch (PDOException $e) {
+        echo json_encode(['status' => 'error', 'message' => '資料庫錯誤：' . $e->getMessage()]);
     }
-} catch (PDOException $e) {
-    echo json_encode(['status' => 'error', 'message' => '資料庫錯誤：' . $e->getMessage()]);
-}
