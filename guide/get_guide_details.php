@@ -38,7 +38,7 @@ try {
                     step_order, 
                     step_title, 
                     step_total_time, 
-                    step_content AS step_description, -- 🟢 關鍵修改：將資料庫的 step_content 轉成前端要的 step_description
+                    step_content,
                     step_image_url, 
                     is_modified 
                   FROM steps 
