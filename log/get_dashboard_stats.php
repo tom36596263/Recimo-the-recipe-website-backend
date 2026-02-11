@@ -16,10 +16,9 @@ require_once '../config/db_config.php';
 // 4. 接收參數
 $user_id = isset($_GET['user_id']) ? intval($_GET['user_id']) : 0;
 
-// 接收前端傳來的日期範圍 (格式 YYYY-MM-DD)
-// 如果沒傳，預設為本月
-$start_date = isset($_GET['start_date']) ? $_GET['start_date'] : date('Y-m-01');
-$end_date   = isset($_GET['end_date'])   ? $_GET['end_date']   : date('Y-m-t');
+// 將預設的 start_date 改到很早以前，end_date 改到未來
+$start_date = isset($_GET['start_date']) ? $_GET['start_date'] : '2000-01-01';
+$end_date   = isset($_GET['end_date'])   ? $_GET['end_date']   : '2099-12-31';
 
 if ($user_id <= 0) {
     echo json_encode(['status' => 'error', 'message' => 'Invalid User ID']);

@@ -1,6 +1,11 @@
 <?php
 require_once '../config/cors.php';
 require_once '../config/db_config.php';
+
+// 🟢 補上禁止快取的 Header，確保編輯時讀到的都是最新資料
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Cache-Control: post-check=0, pre-check=0", false);
+header("Pragma: no-cache");
 header('Content-Type: application/json');
 
 $template_id = $_GET['template_id'] ?? null;
@@ -11,7 +16,6 @@ if (!$template_id) {
 }
 
 try {
-    // 🟢 修正：在 SQL 中補上 protein, carbs, fat 三個欄位
     $sql = "SELECT 
                 ti.item_id,           
                 ti.day_number as day,
@@ -19,6 +23,7 @@ try {
                 ti.recipe_id,
                 r.recipe_title,
                 r.recipe_image_url as recipe_cover_img, 
+                r.recipe_servings, 
                 r.recipe_kcal_per_100g,
                 r.recipe_protein_per_100g, 
                 r.recipe_carbs_per_100g,  
@@ -34,6 +39,11 @@ try {
 
     // 格式化資料
     $result = array_map(function ($item) {
+
+        $servings = (isset($item['recipe_servings']) && (int)$item['recipe_servings'] > 0)
+            ? (int)$item['recipe_servings']
+            : 1;
+
         return [
             'item_id' => $item['item_id'],
             'day' => $item['day'],
@@ -42,10 +52,11 @@ try {
             'detail' => [
                 'recipe_title' => $item['recipe_title'],
                 'recipe_cover_img' => $item['recipe_cover_img'],
-                'recipe_kcal_per_100g' => $item['recipe_kcal_per_100g'],
-                'recipe_protein_per_100g' => $item['recipe_protein_per_100g'],
-                'recipe_carbs_per_100g' => $item['recipe_carbs_per_100g'],
-                'recipe_fat_per_100g' => $item['recipe_fat_per_100g']
+                'recipe_servings' => $servings,
+                'recipe_kcal_per_100g' => (float)$item['recipe_kcal_per_100g'],
+                'recipe_protein_per_100g' => (float)$item['recipe_protein_per_100g'],
+                'recipe_carbs_per_100g' => (float)$item['recipe_carbs_per_100g'],
+                'recipe_fat_per_100g' => (float)$item['recipe_fat_per_100g']
             ]
         ];
     }, $items);
