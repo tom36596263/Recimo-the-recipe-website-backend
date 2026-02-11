@@ -1,14 +1,12 @@
 <?php
-// --- Debug 用 (開發完成後建議註解掉這三行) ---
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
-// ----------------------------------------
-
 // 1. 設定 CORS 與 資料庫連線
 require_once '../config/cors.php';      // 請確認路徑是否正確
 require_once '../config/db_config.php'; // 請確認路徑是否正確
 
+// 加入禁止快取 Header，確保抓到最新資料
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Cache-Control: post-check=0, pre-check=0", false);
+header("Pragma: no-cache");
 header('Content-Type: application/json');
 
 // 2. 獲取並驗證 recipe_id
@@ -33,14 +31,25 @@ try {
     }
 
     // --- B. 獲取步驟 (依照順序排列) ---
-    // 這裡撈取步驟資料，前端 CookingLog 會用到 step_description
-    $stmt = $pdo->prepare("SELECT * FROM steps WHERE recipe_id = ? ORDER BY step_order ASC");
+    // 🟢 修正點：不使用 SELECT *，明確指定欄位，並將 step_content 轉名為 step_description
+    $sql_steps = "SELECT 
+                    step_id, 
+                    recipe_id, 
+                    step_order, 
+                    step_title, 
+                    step_total_time, 
+                    step_content AS step_description, -- 🟢 關鍵修改：將資料庫的 step_content 轉成前端要的 step_description
+                    step_image_url, 
+                    is_modified 
+                  FROM steps 
+                  WHERE recipe_id = ? 
+                  ORDER BY step_order ASC";
+
+    $stmt = $pdo->prepare($sql_steps);
     $stmt->execute([$recipe_id]);
     $steps = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     // --- C. 獲取該食譜的所有食材 (總表) ---
-    // 修正：表名改為 recipe_ingredients (複數)
-    // 注意：如果 ingredients 表沒有圖片欄位，請移除 i.ingredient_img 以免報錯
     $sql_recipe_ingredients = "
         SELECT ri.*, i.ingredient_name 
         FROM recipe_ingredients ri
