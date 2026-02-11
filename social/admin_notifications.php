@@ -78,7 +78,7 @@ function handleImageUpload($fieldName) {
         throw new Exception('圖片大小不能超過 5MB');
     }
 
-    // 使用文件擴展名驗證，不依賴 fileinfo 擴展
+    // 驗證檔案副檔名
     $fileName = strtolower($file['name']);
     $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif'];
     $fileExtension = pathinfo($fileName, PATHINFO_EXTENSION);
@@ -87,38 +87,22 @@ function handleImageUpload($fieldName) {
         throw new Exception('只支持 JPG、PNG、GIF 格式的圖片');
     }
 
-    // 環境判斷（與 admin_save_ingredient.php 一致）
-    $isLocal = (str_contains($_SERVER["HTTP_HOST"], "127.0.0.1") || str_contains($_SERVER["HTTP_HOST"], "localhost"));
-
-    // 根據環境決定專案根目錄
-    if ($isLocal) {
-        // 本地端：recimo_api 就是根目錄
-        $projectRoot = dirname(__DIR__);
-    } else {
-        // 線上版：需要往上兩層（因為檔案在 g2/api/social/）
-        $projectRoot = dirname(dirname(__DIR__));
-    }
-
-    // 設定相對路徑（存資料庫用）
-    $relativeFolder = "img/notifications/";
-
-    // 組合實體路徑
-    $uploadDir = $projectRoot . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relativeFolder);
-
+    // 設定上傳目錄（相對於當前檔案）
+    $uploadDir = '../img/notifications/';
     if (!is_dir($uploadDir)) {
-        if (!mkdir($uploadDir, 0755, true)) {
-            throw new Exception('無法建立資料夾: ' . $uploadDir);
-        }
+        mkdir($uploadDir, 0755, true);
     }
 
+    // 生成新檔名
     $newFileName = 'notification_' . time() . '_' . uniqid() . '.' . $fileExtension;
-    $uploadPath = $uploadDir . $newFileName;
+    $targetPath = $uploadDir . $newFileName;
 
-    if (move_uploaded_file($file['tmp_name'], $uploadPath)) {
-        // 回傳相對路徑（存資料庫）
-        return $relativeFolder . $newFileName;
+    // 上傳檔案
+    if (move_uploaded_file($file['tmp_name'], $targetPath)) {
+        // 回傳相對路徑（存資料庫用）
+        return 'img/notifications/' . $newFileName;
     } else {
-        throw new Exception('圖片保存失敗，目標路徑: ' . $uploadPath);
+        throw new Exception('圖片保存失敗');
     }
 }
 
