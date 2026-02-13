@@ -38,7 +38,7 @@ try {
             // 如果 SQL 模板中有標籤欄位，可在此統一處理格式
             if (isset($r['tag_names'])) {
                 $r['tags'] = $r['tag_names'] ? explode(',', $r['tag_names']) : [];
-                unset($r['tag_names']);
+                // unset($r['tag_names']);
             }
         }
 
