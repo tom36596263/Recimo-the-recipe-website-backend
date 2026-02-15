@@ -36,7 +36,7 @@ $email = $input['email'] ?? '';
 $password = $input['password'] ?? '';
 try {
     // 查詢使用者
-    $sql = "SELECT user_id, user_name, user_email, user_phone, user_address, user_password, user_url FROM users WHERE user_email = ?";
+    $sql = "SELECT user_id, user_name, user_email, user_phone, user_address, user_password, user_url, is_active FROM users WHERE user_email = ?";
     $stmt = $pdo->prepare($sql);
     $stmt->execute([$email]);
     $user = $stmt->fetch();
@@ -45,6 +45,19 @@ try {
         // 使用 password_verify 驗證加密過的密碼
         // $password 是前端傳來的明碼，$user['user_password'] 是資料庫裡的雜湊值
         if (password_verify($password, $user['user_password'])) {
+            // 密碼正確後，立即檢查是否被停權
+            // 這裡判斷 0 或 false，因為資料庫存 0 代表停權
+            if ((int)$user['is_active'] === 0) {
+                echo json_encode([
+                    "status" => "error",
+                    "message" => "您的帳號目前處於停權狀態，請聯繫管理員。"
+                ]);
+                exit; // 停權就不讓他在往下執行登入邏輯
+            }
+
+            // ---------------------------------------------------------
+            // 通過停權檢查，才執行正常的登入程序
+            // ---------------------------------------------------------
             // 密碼正確！
             $_SESSION['user_id'] = $user['user_id'];
             echo json_encode([

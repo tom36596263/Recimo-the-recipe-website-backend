@@ -80,7 +80,16 @@ $stmt->execute([$email]);
 $db_user = $stmt->fetch();
 
 if ($db_user) {
-    // A. 已經是會員：更新頭像或資訊
+    // 如果是老客戶，先檢查他有沒有被停權
+    if ((int)$db_user['is_active'] === 0) {
+        echo json_encode([
+            'status' => 'error',
+            'message' => '您的帳號目前處於停權狀態，請聯繫管理員。'
+        ]);
+        exit; // 直接中斷，不讓他登入
+    }
+    
+    // A. 已經是會員且狀態正常：更新頭像或資訊
     $final_user = $db_user;
 } else {
     // B. 新用戶：自動幫他註冊

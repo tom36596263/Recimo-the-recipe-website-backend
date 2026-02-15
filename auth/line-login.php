@@ -118,6 +118,14 @@ try {
     $user = $stmt->fetch();
 
     if ($user) {
+        // 檢查是否被停權
+        if ((int)$user['is_active'] === 0) {
+            echo json_encode([
+                'status' => 'error',
+                'message' => '您的帳號目前處於停權狀態，請聯繫管理員。'
+            ]);
+            exit; // 停權就中斷，不執行後面的 Session 寫入
+        }
         // 已有帳號：登入
         $resUser = [
             'user_id'      => $user['user_id'],      // 改為 user_id
@@ -128,7 +136,7 @@ try {
             'user_address' => $user['user_address']
         ];
     } else {
-        // 沒有帳號：自動註冊
+        // 沒有帳號：自動註冊 (新註冊預設 is_active 為 1，所以不用檢查)
         $userEmail = $profile['email'] ?? ($lineUserId . "@line.com");
         $dummyPassword = password_hash(uniqid(), PASSWORD_DEFAULT);
 

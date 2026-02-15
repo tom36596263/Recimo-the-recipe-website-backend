@@ -37,7 +37,7 @@ if (isset($fbUser['email'])) {
     // 第四步：撰寫 SQL 語句
     // ---------------------------------------------------------
     if (!$user) {
-        // 第一次登入，依照欄位自動註冊
+        // 第一次登入，依照欄位自動註冊 (預設 is_active 為 1)
         $sql = "INSERT INTO users (user_name, user_email, user_url, user_password, user_startdate, is_verified, is_active) 
                 VALUES (?, ?, ?, ?, NOW(), 1, 1)";
 
@@ -47,6 +47,14 @@ if (isset($fbUser['email'])) {
         $insert = $pdo->prepare($sql);
         $insert->execute([$name, $email, $picture, $randomPass]);
     } else {
+        // 如果是老客戶，先檢查他有沒有被停權
+        if ((int)$user['is_active'] === 0) {
+            echo json_encode([
+                'status' => 'error',
+                'message' => '您的帳號目前處於停權狀態，請聯繫管理員。'
+            ]);
+            exit; // 停權就中斷，不讓 Session 被寫入
+        }
         // 如果使用者已存在，也可以更新一下頭貼
         $update = $pdo->prepare("UPDATE users SET user_url = ? WHERE user_email = ?");
         $update->execute([$picture, $email]);
