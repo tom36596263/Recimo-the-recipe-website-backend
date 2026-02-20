@@ -1,0 +1,140 @@
+<?php
+// ---------------------------------------------------------
+// 第一步：引入 CORS 權限設定 (必須放在程式碼最上方)
+// ---------------------------------------------------------
+require_once '../config/cors.php';
+
+// ---------------------------------------------------------
+// 第二步：引入資料庫連線設定
+// ---------------------------------------------------------
+require_once '../config/db_config.php';
+
+// ---------------------------------------------------------
+// 第三步：補強設定 - 宣告回傳格式為 JSON (讓前端 Axios 自動解析)
+// ---------------------------------------------------------
+header("Content-Type: application/json; charset=UTF-8");
+
+// 處理預檢請求
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    exit;
+}
+
+// 接收並檢查 Token
+$input = json_decode(file_get_contents('php://input'), true);
+$access_token = $input['access_token'] ?? null;
+
+if (!$access_token) {
+    echo json_encode(['status' => 'error', 'message' => '前端未傳送 access_token']);
+    exit;
+}
+
+// 進階 cURL 配置
+$google_url = "https://www.googleapis.com/oauth2/v3/userinfo?access_token=" . $access_token;
+
+$ch = curl_init();
+curl_setopt($ch, CURLOPT_URL, $google_url);
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+// 強制忽略 SSL 檢查 (解決測試站憑證包不全的問題)
+curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+// 設定 User-Agent (模擬瀏覽器，防止被 Google 擋掉)
+curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+
+$response = curl_exec($ch);
+$http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+$curl_error = curl_error($ch);
+curl_close($ch);
+
+// DEBUG：如果連向 Google 失敗
+if ($http_code !== 200) {
+    echo json_encode([
+        'status' => 'error',
+        'message' => 'Google 驗證失敗',
+        'debug' => [
+            'http_code' => $http_code,
+            'curl_error' => $curl_error,
+            'response' => json_decode($response, true) ?: $response
+        ]
+    ]);
+    exit;
+}
+
+$user_info = json_decode($response, true);
+
+if (!isset($user_info['email'])) {
+    echo json_encode(['status' => 'error', 'message' => '無效的 Google Token']);
+    exit;
+}
+
+// ---------------------------------------------------------
+// 第四步：撰寫 SQL 語句
+// ---------------------------------------------------------
+// 比對資料庫
+$email = $user_info['email'];
+$name  = $user_info['name'];
+$picture = $user_info['picture'] ?? null; // Google 大頭照
+
+$stmt = $pdo->prepare("SELECT * FROM users WHERE user_email = ?");
+$stmt->execute([$email]);
+$db_user = $stmt->fetch();
+
+if ($db_user) {
+    // 如果是老客戶，先檢查他有沒有被停權
+    if ((int)$db_user['is_active'] === 0) {
+        echo json_encode([
+            'status' => 'error',
+            'message' => '您的帳號目前處於停權狀態，請聯繫管理員。'
+        ]);
+        exit; // 直接中斷，不讓他登入
+    }
+    
+    // A. 已經是會員且狀態正常：更新頭像或資訊
+    $final_user = $db_user;
+} else {
+    // B. 新用戶：自動幫他註冊
+    // 密碼部分：因為是 Google 登入，存入一段隨機字串，防止直接被猜中
+    $random_password = password_hash(bin2hex(random_bytes(10)), PASSWORD_DEFAULT);
+
+    $insert_sql = "INSERT INTO users (
+        user_name, user_email, user_password, user_url, 
+        user_startdate, is_verified, is_active
+    ) VALUES (?, ?, ?, ?, NOW(), 1, 1)";
+
+    $insert_stmt = $pdo->prepare($insert_sql);
+    $insert_stmt->execute([$name, $email, $random_password, $picture]);
+
+    $new_id = $pdo->lastInsertId();
+    $stmt = $pdo->prepare("SELECT * FROM users WHERE user_id = ?");
+    $stmt->execute([$new_id]);
+    $final_user = $stmt->fetch();
+}
+
+// 建立 Session 或回傳資料
+// 找到或註冊完使用者後
+session_start();
+// 統一存入 $_SESSION['user'] 陣列
+$_SESSION['user'] = [
+    'user_id' => $final_user['user_id'],
+    'user_name' => $final_user['user_name'],
+    'user_email' => $final_user['user_email'],
+    'user_phone'   => $final_user['user_phone'] ?? '',
+    'user_address' => $final_user['user_address'] ?? ''
+];
+// 為了相容原本的寫法，也存一份獨立的 user_id
+$_SESSION['user_id']      = $final_user['user_id'];
+$_SESSION['user_name']    = $final_user['user_name'];
+$_SESSION['user_phone']   = $final_user['user_phone'] ?? '';
+$_SESSION['user_address'] = $final_user['user_address'] ?? '';
+
+echo json_encode([
+    'status' => 'success',
+    'user' => [
+        'user_id' => $final_user['user_id'], // 改成 user_id
+        'user_name' => $final_user['user_name'], // 建議與後端欄位一致
+        'user_email' => $final_user['user_email'],
+        'user_url' => $final_user['user_url'],
+        'user_phone'   => $final_user['user_phone'] ?? '',
+        'user_address' => $final_user['user_address'] ?? ''
+    ]
+]);

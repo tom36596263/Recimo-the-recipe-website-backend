@@ -1,0 +1,281 @@
+<?php
+
+require_once '../config/cors.php';
+require_once '../config/db_config.php';
+header('Content-Type: application/json; charset=utf-8');
+
+
+// 強制讓 PDO 錯誤顯示，方便除錯
+$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+if (!isset($isLocal)) {
+
+    $isLocal = (str_contains($_SERVER["HTTP_HOST"], "127.0.0.1") || str_contains($_SERVER["HTTP_HOST"], "localhost"));
+}
+
+
+
+$imgBaseUrl = $isLocal
+    ? 'http://' . $_SERVER['HTTP_HOST'] . '/recimo_api/img/mall/'
+    : 'https://tibamef2e.com/cjd102/g2/api/img/mall/';
+
+
+
+$method = $_SERVER['REQUEST_METHOD'];
+$action = $_GET['action'] ?? '';
+try {
+
+    //讀取商品資料 (GET)
+    if ($method === 'GET' && $action === 'read') {
+
+        $sql = "SELECT * FROM products ORDER BY PRODUCT_ID";
+
+        $stmt = $pdo->query($sql);
+
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $response = [];
+
+        foreach ($rows as $row) {
+            $row = array_change_key_case($row, CASE_UPPER);
+            // 處理圖片路徑
+            $imgData = json_decode($row['PRODUCT_IMAGE'] ?? '[]', true);
+            $allImages = [];
+
+            if (is_array($imgData)) {
+
+                foreach ($imgData as $item) {
+
+                    $fileName = isset($item['image_url']) ? basename($item['image_url']) : null;
+
+                    if ($fileName) $allImages[] = $imgBaseUrl . $fileName;
+
+                }
+
+            }
+
+
+
+            // 組合回傳資料（對應 Vue 的欄位結構）
+            $response[] = [
+
+                'id'                  => (int)($row['PRODUCT_ID'] ?? 0),
+
+                'product_id'          => (int)($row['PRODUCT_ID'] ?? 0),
+
+                'product_name'        => $row['PRODUCT_NAME'] ?? '',
+
+                'product_category'    => $row['PRODUCT_CATEGORY'] ?? '',
+
+                'product_price'       => (int)($row['PRODUCT_PRICE'] ?? 0),
+
+                'product_description' => $row['PRODUCT_DESCRIPTION'] ?? '',
+
+                'images'              => $allImages,
+
+                'tags'                => [
+
+                    'product_kcal'           => (float)($row['PRODUCT_KCAL'] ?? 0),
+
+                    'product_carbs'          => (float)($row['PRODUCT_CARBS'] ?? 0),
+
+                    'product_fat'            => (float)($row['PRODUCT_FAT'] ?? 0),
+
+                    'product_fiber'          => (float)($row['PRODUCT_FIBER'] ?? 0),
+
+                    'product_protein'        => (float)($row['PRODUCT_PROTEIN'] ?? 0),
+
+                    'product_saturated_fat'  => (float)($row['PRODUCT_SATURATED_FAT'] ?? 0),
+
+                    'product_sugar'          => (float)($row['PRODUCT_SUGAR'] ?? 0),
+
+                    'product_sodium'         => (float)($row['PRODUCT_SODIUM'] ?? 0),
+                    
+                    'product_net_weight' => (float)($row['PRODUCT_NET_WEIGHT'] ?? 0),
+
+                    'product_cooking_method' => $row['PRODUCT_COOKING_METHOD'] ?? '',
+
+                    'product_ingredients'    => $row['PRODUCT_INGREDIENTS'] ?? '',
+
+                    'product_storage_method' => $row['PRODUCT_STORAGE_METHOD'] ?? '',
+
+                    'product_reminder'       => $row['PRODUCT_REMINDER'] ?? '',
+
+                    'product_release'        => (int)($row['PRODUCT_RELEASE'] ?? 1),
+                   'product_is_hot' => (int)($row['PRODUCT_IS_HOT'] ?? 0)
+                    
+                ]
+
+            ];
+
+        }
+
+        echo json_encode($response, JSON_UNESCAPED_UNICODE);
+
+        exit;
+
+    }
+
+// 更新商品資料 (POST)
+else if ($method === 'POST' && $action === 'update') {
+    $json = file_get_contents('php://input');
+    $data = json_decode($json, true);
+
+    // 優先從 JSON 取值，若無則從 $_POST 取值
+    $productId = $data['product_id'] ?? $_POST['product_id'] ?? null;
+    $productRelease = $data['product_release'] ?? $_POST['product_release'] ?? null;
+    $productName = $data['product_name'] ?? $_POST['product_name'] ?? null;
+
+    if (!$productId) {
+        echo json_encode(['status' => 'error', 'message' => '缺少商品ID']);
+        exit;
+    }
+
+    // 💡 判斷是否為「快速上下架」模式
+    $isFullUpdate = isset($productName);
+
+    if (!$isFullUpdate) {
+        // 準備一個陣列來存儲要更新的欄位
+    $updateFields = [];
+    $params = [':id' => $productId];
+
+    // 檢查是否有傳送「上下架」狀態
+    if (isset($data['product_release']) || isset($_POST['product_release'])) {
+        $updateFields[] = "PRODUCT_RELEASE = :release";
+        $params[':release'] = $data['product_release'] ?? $_POST['product_release'];
+    }
+
+    // 檢查是否有傳送「熱銷」狀態
+   if (isset($data['product_is_hot']) || isset($_POST['product_is_hot'])) {
+    $updateFields[] = "PRODUCT_IS_HOT = :is_hot";
+    // 💡 修正：強制轉為 0 或 1，避免布林值導致 SQL 失敗
+    $val = $data['product_is_hot'] ?? $_POST['product_is_hot'];
+    $params[':is_hot'] = $val ? 1 : 0; 
+}
+
+    // 如果有任何欄位需要更新
+    if (!empty($updateFields)) {
+        $sql = "UPDATE products SET " . implode(', ', $updateFields) . " WHERE PRODUCT_ID = :id";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        
+        echo json_encode(['status' => 'success', 'message' => '狀態更新成功']);
+    } else {
+        echo json_encode(['status' => 'error', 'message' => '未提供更新資訊']);
+    }
+    exit;
+        } else {
+            //完整更新商品資料 (包含圖片刪除與所有欄位) 
+        if ($isLocal) {
+            // 本機開發環境 (保持原本寫法)
+            $uploadDir = __DIR__ . '/../img/mall/';
+        } else {
+            // 伺服器部署環境 (tibamef2e) - 使用絕對路徑
+            // $_SERVER['DOCUMENT_ROOT'] 會抓到伺服器的根目錄
+            $uploadDir = $_SERVER['DOCUMENT_ROOT'] . '/cjd102/g2/api/img/mall/';
+        }
+
+        // 檢查資料夾是否存在，不存在就建立 (預防措施)
+        if (!file_exists($uploadDir)) {
+            mkdir($uploadDir, 0777, true);
+        }
+
+        // 先從資料庫查出「原本的圖片」做為刪除對照
+        $stmtSelect = $pdo->prepare("SELECT PRODUCT_IMAGE FROM products WHERE PRODUCT_ID = :id");
+        $stmtSelect->execute([':id' => $productId]);
+        $oldRow = $stmtSelect->fetch(PDO::FETCH_ASSOC);
+        $oldImagesArr = json_decode($oldRow['PRODUCT_IMAGE'] ?? '[]', true);
+        $oldFiles = array_map(fn($img) => basename($img['image_url']), $oldImagesArr);
+
+        $finalImages = [];
+        $keptFiles = []; 
+
+        // 處理前端傳過來「要保留」的舊圖片
+        if (isset($_POST['existing_images']) && is_array($_POST['existing_images'])) {
+            foreach ($_POST['existing_images'] as $index => $url) {
+                $fileName = basename($url);
+                $keptFiles[] = $fileName;
+                $finalImages[] = [
+                    'id' => $index + 1,
+                    'is_cover' => ($index === 0),
+                    'image_url' => "img/mall/" . $fileName
+                ];
+            }
+        }
+
+        //找出資料庫有，但前端沒傳過來的檔案
+        $filesToDelete = array_diff($oldFiles, $keptFiles);
+        foreach ($filesToDelete as $file) {
+            $target = $uploadDir . $file;
+            if (file_exists($target)) {
+                unlink($target); 
+            }
+        }
+
+        // 處理新上傳圖片 (使用 uniqid 解決你換回舊圖存不進去的問題)
+        if (isset($_FILES['product_images'])) {
+            foreach ($_FILES['product_images']['tmp_name'] as $key => $tmpName) {
+                if ($_FILES['product_images']['error'][$key] === UPLOAD_ERR_OK) {
+                    $fileExt = pathinfo($_FILES['product_images']['name'][$key], PATHINFO_EXTENSION);
+                    $newFileName = uniqid('prod_') . '.' . $fileExt;
+                    if (move_uploaded_file($tmpName, $uploadDir . $newFileName)) {
+                        $finalImages[] = [
+                            'id' => count($finalImages) + 1,
+                            'is_cover' => (count($finalImages) === 0), 
+                            'image_url' => "api/img/mall/" . $newFileName
+                        ];
+                    }
+                }
+            }
+        }
+
+        $jsonImages = json_encode($finalImages, JSON_UNESCAPED_UNICODE);
+
+        // 【恢復所有原本欄位】執行完整資料庫更新
+        $sql = "UPDATE products SET 
+                PRODUCT_NAME = :name, PRODUCT_CATEGORY = :cat, PRODUCT_PRICE = :price, 
+                PRODUCT_DESCRIPTION = :descr, PRODUCT_RELEASE = :release, 
+                PRODUCT_IS_HOT = :is_hot,PRODUCT_KCAL = :kcal,
+                PRODUCT_CARBS = :carbs, PRODUCT_FAT = :fat, PRODUCT_FIBER = :fiber,
+                PRODUCT_PROTEIN = :protein, PRODUCT_SATURATED_FAT = :st_fat, PRODUCT_SUGAR = :sugar,
+                PRODUCT_SODIUM = :sodium, PRODUCT_INGREDIENTS = :ingredients,
+                PRODUCT_NET_WEIGHT = :net_weight,
+                PRODUCT_COOKING_METHOD = :cooking, PRODUCT_STORAGE_METHOD = :storage,
+                PRODUCT_REMINDER = :reminder, PRODUCT_IMAGE = :images
+                WHERE PRODUCT_ID = :id";
+        
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([
+            ':name'        => $_POST['product_name'] ?? '',
+            ':cat'         => $_POST['product_category'] ?? '',
+            ':price'       => $_POST['product_price'] ?? 0,
+            ':descr'       => $_POST['product_description'] ?? '',
+            ':release'     => $_POST['product_release'] ?? 1,
+            ':is_hot'       => $_POST['product_is_hot'] ?? 0,
+            ':kcal'        => $_POST['product_kcal'] ?? 0,
+            ':carbs'       => $_POST['product_carbs'] ?? 0,
+            ':fat'         => $_POST['product_fat'] ?? 0,
+            ':fiber'       => $_POST['product_fiber'] ?? 0,
+            ':protein'     => $_POST['product_protein'] ?? 0,
+            ':st_fat'      => $_POST['product_saturated_fat'] ?? 0,
+            ':sugar'       => $_POST['product_sugar'] ?? 0,
+            ':sodium'      => $_POST['product_sodium'] ?? 0,
+            ':ingredients' => $_POST['product_ingredients'] ?? '',
+            ':net_weight'  => $_POST['product_net_weight'] ?? 0,
+            ':cooking'     => $_POST['product_cooking_method'] ?? '',
+            ':storage'     => $_POST['product_storage_method'] ?? '',
+            ':reminder'    => $_POST['product_reminder'] ?? '',
+            ':images'      => $jsonImages,
+            ':id'          => $productId
+        ]);
+
+        echo json_encode(['status' => 'success', 'message' => '商品資料與圖片同步更新成功']);
+        exit;
+    }
+}
+} catch (PDOException $e) {
+
+    http_response_code(500);
+
+    echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+
+}
